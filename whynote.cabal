@@ -1,0 +1,33 @@
+name:           whynote
+version:        1
+category:       Whatever
+synopsis:       A minimal note-taking program
+description:
+  Soon to appear.
+license:        GPL-3
+author:         Jean-Philippe Bernardy
+maintainer:     jeanphilippe.bernardy@gmail.com
+Cabal-Version:  >= 1.12
+build-type:     Simple
+
+executable whynote
+  default-language: Haskell2010
+  build-depends: base>=4
+  build-depends: glib
+  build-depends: mtl
+  build-depends: gtk3
+  build-depends: cairo
+
+  main-is: Test.hs
+  other-modules: Device
+  -- other-modules: Dev
+  cc-options:      -Wno-pointer-to-int-cast -std=gnu99 -DDEBUG  -fPIC
+  extra-libraries: X11 Xi
+  install-includes: 
+                   c/c_initdevice.h
+                   c/template-hsc-gtk2hs.h
+                   c/XInput.h
+  c-sources: c/c_initdevice.c
+  include-dirs:    c
+
+ 
