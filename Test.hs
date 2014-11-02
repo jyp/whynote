@@ -25,8 +25,7 @@ main= do
 
      on canvas buttonPressEvent $ do
        ev <- ask
-       liftIO $ print (gdk_event_get_source_device ev)
-       liftIO . print =<< eventButton
+       liftIO . print =<< getPointer devices
        return True
 
      on window deleteEvent $ return False

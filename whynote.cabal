@@ -26,7 +26,7 @@ executable whynote
   install-includes: 
                    c/c_initdevice.h
                    c/template-hsc-gtk2hs.h
-                   c/XInput.h
+                   -- c/XInput.h
   c-sources: c/c_initdevice.c
   include-dirs:    c
 

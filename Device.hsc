@@ -35,7 +35,7 @@ data PointerType = Core | Stylus | Eraser | Touch
                  deriving (Show,Eq,Ord)
 
 -- |
-data PenButton = PenButton1 | PenButton2 | PenButton3 | EraserButton | TouchButton
+data PenButton = PenButton1 | PenButton2 | PenButton3 | EraserButton | TouchButton | Unknown
                deriving (Show,Eq,Ord)
 
 -- | 
@@ -73,20 +73,20 @@ foreign import ccall "c_initdevice.h initdevice" c_initdevice
 
 
 foreign import ccall "gdk_event_get_source_device" gdk_event_get_source_device
-  :: Ptr EButton -> Int
+  :: Ptr t -> Device
 
 -- | 
 initDevice :: Widget -> Config.WNConfig -> IO DeviceList  
 initDevice widget (Config.WNConfig{..}) =
- withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w -> do
+ withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w ->
   with 0 $ \pcore ->
     with 0 $ \pstylus ->
-      with 0 $ \peraser -> do
+      with 0 $ \peraser ->
         with 0 $ \ptouch -> do
           pcorename <- newCString core
           pstylusname <- newCString stylus
           perasername <- newCString eraser
-          ptouchname <- newCString touch
+          ptouchname <- newCString touch 
 
           c_initdevice w pcore pstylus peraser ptouch pcorename pstylusname perasername ptouchname
 
@@ -95,35 +95,29 @@ initDevice widget (Config.WNConfig{..}) =
           eraser_val <- peek peraser
           touch_val <- peek ptouch
           return $ DeviceList core_val stylus_val eraser_val touch_val
-                 
+
+class HasCoords t
+
+instance HasCoords EButton
+  
 -- |
-getPointer :: DeviceList -> EventM t (Maybe PenButton,Maybe PointerCoord)
-getPointer devlst = do 
-    ptr <- ask 
-    (_ty,btn,x,y,mdev,maxf) <- liftIO (getInfo ptr)
-    let rbtn | btn == 0 = Nothing 
-             | btn == 1 = Just PenButton1
-             | btn == 2 = Just PenButton2 
-             | btn == 3 = Just PenButton3
-             | otherwise = Nothing 
-    case mdev of 
-      Nothing -> -- return (rbtn,PointerCoord Core x y 1.0)
-                 return (rbtn,Nothing)
-      Just dev -> case maxf of 
-                    Nothing -> return (rbtn,Just (PointerCoord Core x y 1.0))
-                               -- return (rbtn,Nothing)
-                    Just axf -> do 
-                      mpcoord <- liftIO $ coord ptr x y dev axf 
-                      let rbtnfinal = case mpcoord of 
-                                        Nothing -> rbtn 
-                                        Just pcoord -> case pointerType pcoord of 
-                                                         Eraser -> Just EraserButton
-                                                         Touch  -> Just TouchButton
-                                                         _ -> rbtn 
-                      
-                      let tst = (rbtnfinal,mpcoord)
-                      return tst 
-  where 
+getPointer :: HasCoords t => DeviceList -> EventM t (PenButton,CInt,PointerCoord)
+getPointer devlst = do
+    ptr <- ask
+    let dev = gdk_event_get_source_device ptr
+    (_ty,btn,x,y,axf) <- liftIO (getInfo ptr)
+    pcoord <- liftIO $ coord x y dev axf 
+    let rbtn = case pointerType pcoord of 
+          Eraser -> EraserButton
+          Touch  -> TouchButton
+          _ -> case btn of
+                 1 -> PenButton1
+                 2 -> PenButton2 
+                 3 -> PenButton3
+                 _ -> Unknown
+    return (rbtn, dev, pcoord)
+  where
+    getInfo :: Ptr t -> IO (Int32, Int32, Double, Double, Ptr CDouble)
     getInfo ptr = do 
       (ty :: #{gtk2hs_type GdkEventType}) <- peek (castPtr ptr)
       if ty `elem` [ #{const GDK_BUTTON_PRESS}
@@ -134,52 +128,37 @@ getPointer devlst = do
           (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventButton, x} ptr 
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventButton, y} ptr
           (btn :: #{gtk2hs_type gint}) <- #{peek GdkEventButton, button} ptr
-          (dev :: CInt) <- #{peek GdkEventButton, device} ptr
-          let axisfunc = #{peek GdkEventButton, axes}
-          return (ty,btn,realToFrac x,realToFrac y,Just dev,Just axisfunc)
-        else if ty `elem` [ #{const GDK_SCROLL} ] 
-        then do
-          (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventScroll, x} ptr
-          (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventScroll, y} ptr
-          (dev :: CInt) <- #{peek GdkEventScroll, device} ptr
-          return (ty,0,realToFrac x, realToFrac y,Just dev,Nothing)
+          axis <- #{peek GdkEventButton, axes} ptr
+          return (ty,btn,realToFrac x,realToFrac y,axis)
         else if ty `elem` [ #{const GDK_MOTION_NOTIFY} ] 
         then do
           (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventMotion, x} ptr
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventMotion, y} ptr
-          (dev :: CInt) <- #{peek GdkEventMotion, device} ptr
-          let axisfunc = #{peek GdkEventMotion, axes}          
-          return (ty,0,realToFrac x, realToFrac y,Just dev,Just axisfunc)
-        else if ty `elem` [ #{const GDK_ENTER_NOTIFY},
-                            #{const GDK_LEAVE_NOTIFY}] 
-        then do
-          (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventCrossing, x} ptr
-          (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventCrossing, y} ptr
-          return (ty,0,realToFrac x, realToFrac y,Nothing,Nothing)
+          axis <- #{peek GdkEventButton, axes} ptr
+          return (ty,0,realToFrac x, realToFrac y,axis)
         else error ("eventCoordinates: none for event type "++show ty)
-
-    coord ptr x y device axf 
-          | device == dev_core devlst = return $ Just (PointerCoord Core x y 1.0)
+    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO PointerCoord
+    coord x y device ptrax
           | device == dev_stylus devlst = do 
-            (ptrax :: Ptr CDouble ) <- axf ptr 
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16
-            return $ Just (PointerCoord Stylus wacomx wacomy wacomz)
+            return $ (PointerCoord Stylus wacomx wacomy wacomz)
           | device == dev_eraser devlst = do 
-            (ptrax :: Ptr CDouble ) <- axf ptr 
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16 
-            return $ Just (PointerCoord Eraser wacomx wacomy wacomz)
-          | device == dev_touch devlst = do 
-            (ptrax :: Ptr CDouble ) <- axf ptr 
-            (touchx :: Double) <- peekByteOff ptrax 0
-            (touchy :: Double) <- peekByteOff ptrax 8
-            (touchz :: Double) <- peekByteOff ptrax 16 
-            -- (touchw :: Double) <- peekByteOff ptrax 24
-            return $ Just (PointerCoord Touch touchx touchy touchz)            
-          | otherwise = return Nothing -- return $ PointerCoord Core x y 1.0
+            return $ (PointerCoord Eraser wacomx wacomy wacomz)
+            -- Touch may be provided by touch screen -- not wacom device -- so no pressure here.
+          -- | device == dev_touch devlst = do 
+          --   (touchx :: Double) <- peekByteOff ptrax 0
+          --   (touchy :: Double) <- peekByteOff ptrax 8
+          --   (touchz :: Double) <- peekByteOff ptrax 16 
+          --   -- (touchw :: Double) <- peekByteOff ptrax 24
+          --   return $ (PointerCoord Touch touchx touchy touchz)            
+          | otherwise = return $ PointerCoord Core x y 1.0
+type Device = CInt
+
 {-
 -- | 
     
