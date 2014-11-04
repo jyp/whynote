@@ -22,15 +22,49 @@ main= do
      on canvas draw $ do
        liftIO $ renderWithDrawWindow drawin myDraw
        return ()
+     debugShit (castToWidget canvas)
+     widgetAddEvents canvas [TouchMask, ButtonMotionMask]
 
      on canvas buttonPressEvent $ do
        ev <- ask
-       liftIO . print =<< getPointer devices
+       liftIO $ putStrLn "Button"
+       liftIO $ print =<< getPointer devices ev
+       return True
+
+     on canvas motionNotifyEvent $ do
+       ev <- ask
+       liftIO $ putStrLn "Motion"
+       liftIO $ print =<< getPointer devices ev
        return True
 
      on window deleteEvent $ return False
      on window destroyEvent (do liftIO mainQuit; return True)
      mainGUI
+
+strokeProcess ps'@(p1:ps)  = do
+  drawStroke ps'
+  ev <- waitEvent
+  case evType ev of
+    EMotion -> do
+      let p0 = pos ev
+          d = norm $ p1 - p0
+      if d > 0.1
+         then strokeProcess (p0:p1:ps)
+         else strokeProcess ps'
+    ERelease -> do
+      return ps'
+
+
+strokeProcessStart = do
+  grabFocus
+  strk <- strokeProcess
+  storeStroke strk
+
+mainProcess = do
+  ev <- waitEvent
+  case evType ev of
+    EButton -> strokeProcess (pos ev)
+    _ -> mainProcess
 
 myDraw :: Render ()
 myDraw = do

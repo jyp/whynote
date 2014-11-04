@@ -99,14 +99,15 @@ initDevice widget (Config.WNConfig{..}) =
 class HasCoords t
 
 instance HasCoords EButton
-  
+instance HasCoords EMotion
+
+
 -- |
-getPointer :: HasCoords t => DeviceList -> EventM t (PenButton,CInt,PointerCoord)
-getPointer devlst = do
-    ptr <- ask
+getPointer :: DeviceList -> Ptr t -> IO (PenButton,PointerCoord)
+getPointer devlst ptr = do
     let dev = gdk_event_get_source_device ptr
-    (_ty,btn,x,y,axf) <- liftIO (getInfo ptr)
-    pcoord <- liftIO $ coord x y dev axf 
+    (_ty,btn,x,y,axf) <- getInfo ptr
+    pcoord <- coord x y dev axf 
     let rbtn = case pointerType pcoord of 
           Eraser -> EraserButton
           Touch  -> TouchButton
@@ -115,7 +116,7 @@ getPointer devlst = do
                  2 -> PenButton2 
                  3 -> PenButton3
                  _ -> Unknown
-    return (rbtn, dev, pcoord)
+    return (rbtn, pcoord)
   where
     getInfo :: Ptr t -> IO (Int32, Int32, Double, Double, Ptr CDouble)
     getInfo ptr = do 
@@ -150,7 +151,8 @@ getPointer devlst = do
             (wacomz :: Double) <- peekByteOff ptrax 16 
             return $ (PointerCoord Eraser wacomx wacomy wacomz)
             -- Touch may be provided by touch screen -- not wacom device -- so no pressure here.
-          -- | device == dev_touch devlst = do 
+          | device == dev_touch devlst =
+             return $ PointerCoord Touch x y 1.0
           --   (touchx :: Double) <- peekByteOff ptrax 0
           --   (touchy :: Double) <- peekByteOff ptrax 8
           --   (touchz :: Double) <- peekByteOff ptrax 16 
