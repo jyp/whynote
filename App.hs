@@ -11,6 +11,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Control.Applicative
+import Data.IORef
 
 testProcess :: GtkP ()
 testProcess = do
@@ -19,13 +20,19 @@ testProcess = do
     render (drawEv ev)
   testProcess
 
+invalidate :: GtkP ()
+invalidate = do
+  Context {..} <- ask
+  liftIO $ do
+    w <- liftIO $ Gtk.drawWindowGetWidth ctxDrawWindow
+    h <- liftIO $ Gtk.drawWindowGetHeight ctxDrawWindow
+    Gtk.drawWindowInvalidateRect ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
+
 render :: Cairo.Render () -> GtkP ()
 render x = do
   Context {..} <- ask
-  liftIO $ Gtk.renderWithDrawWindow ctxDrawWindow x
-  h <- liftIO $ Gtk.drawWindowGetWidth ctxDrawWindow
-  w <- liftIO $ Gtk.drawWindowGetHeight ctxDrawWindow
-  liftIO $ Gtk.widgetQueueDrawArea ctxCanvas 0 0 200 200
+  liftIO $ writeIORef ctxRender x
+  invalidate
 
 strokeProcess :: Source -> [PointerCoord] -> GtkP [PointerCoord]
 strokeProcess source c = do
@@ -33,8 +40,9 @@ strokeProcess source c = do
   ev <- wait "next stroke point"
   case eventSource ev == source of
     False -> strokeProcess source c -- ignore events from another source
-    True -> case eventType ev of
-      Event.Release -> return c -- done
+    True -> case ev of
+      Event {eventType  = Event.Release} -> return c
+      Event {eventModifiers = 0} -> return c -- motion without any pressed key
       _ -> strokeProcess source (eventCoord ev:c)
 
 strokeProcessStart :: Source -> GtkP ()
@@ -47,8 +55,11 @@ strokeProcessStart source = do
 
 mainProcess :: GtkP ()
 mainProcess = do
+  Context {..} <- ask
   ev <- wait "top-level"
   case ev of
-    Event {eventType = Press, eventButton = 0} -> strokeProcessStart (eventSource ev)
+    Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
+      strokeProcessStart (eventSource ev)
+      mainProcess
     _ -> mainProcess
 

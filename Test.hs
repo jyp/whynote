@@ -24,24 +24,31 @@ main = do
 
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
-     on canvas draw $ do
-       -- liftIO $ renderWithDrawWindow drawin myDraw
-       return ()
-     widgetAddEvents canvas [TouchMask, PointerMotionMask]
-
-     let ctx = Context drawin canvas
+     render <- newIORef $ return ()
+     let ctx = Context drawin canvas render
      setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup
+
+     widgetAddEvents canvas [TouchMask, PointerMotionMask]
+
+     on canvas draw $ liftIO $ do
+       state <- readIORef continuation
+       d <- readIORef render
+       renderWithDrawWindow drawin $ do
+         moveTo 0 20
+         showText $ show state
+         d
+       return ()
 
      let handleEvent :: EventM t Bool
          handleEvent = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             print ev'
              oldState <- readIORef continuation
              newState <- resume oldState ev'
-             print newState
+             -- print ev'
+             -- print newState
              writeIORef continuation newState
            return True
 
