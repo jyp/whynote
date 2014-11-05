@@ -3,6 +3,7 @@ module Render where
 import Graphics.Rendering.Cairo as Cairo
 import Event
 import Control.Monad 
+import Drawing
 
 drawEv :: Event -> Render ()
 drawEv ev@Event{eventCoord = PointerCoord x y z t} = do
@@ -48,3 +49,6 @@ drawVWStrokeCurve (phead@(PointerCoord xo yo _z0 _t0) : xs) = do
                let shift = turn $ ((1/dist) * z * zFactor) *. dp
                Prelude.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
+
+renderDrawing :: Drawing -> Render ()
+renderDrawing cs = forM_ cs drawStroke

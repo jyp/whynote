@@ -1,6 +1,7 @@
 import Graphics.UI.Gtk
 import Graphics.Rendering.Cairo
 import Device
+import Drawing
 import Control.Monad.Reader
 import Config
 import Process
@@ -25,9 +26,11 @@ main = do
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
      render <- newIORef $ return ()
-     let ctx = Context drawin canvas render
+     drawing <- newIORef emptyDrawing
+     let ctx = Context drawin canvas render drawing
      setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup
+
 
      widgetAddEvents canvas [TouchMask, PointerMotionMask]
 
