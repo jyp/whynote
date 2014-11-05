@@ -4,6 +4,7 @@ import Device
 import Control.Monad.Reader
 import Config
 import Process
+import GtkProcess
 import App
 import Data.IORef
 
@@ -28,7 +29,8 @@ main = do
        return ()
      widgetAddEvents canvas [TouchMask, PointerMotionMask]
 
-     setup <- exec $ run $ testProcess drawin
+     let ctx = Context drawin canvas
+     setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup
 
      let handleEvent :: EventM t Bool
@@ -39,6 +41,7 @@ main = do
              print ev'
              oldState <- readIORef continuation
              newState <- resume oldState ev'
+             print newState
              writeIORef continuation newState
            return True
 

@@ -1,63 +1,54 @@
+{-# LANGUAGE RecordWildCards #-}
 module App where
 
 import Event
+import GtkProcess
 import Process
 import Render
-import Graphics.UI.Gtk as Gtk
-import Graphics.Rendering.Cairo as Cairo hiding (liftIO)
+import qualified Graphics.UI.Gtk as Gtk
+import qualified Graphics.Rendering.Cairo as Cairo
 import Control.Monad
-import Control.Monad.IO.Class (liftIO)
+import Control.Monad.IO.Class
+import Control.Monad.Reader
+import Control.Applicative
 
-drawEv :: Event -> Render ()
-drawEv ev@Event{eventCoord = PointerCoord x y z t} = do
-    setSourceRGB 0 0 0
-    setLineWidth 2
-    moveTo x y
-    arc x y (2 * z) 0 3
-    stroke
-
-testProcess dw = do
+testProcess :: GtkP ()
+testProcess = do
   ev <- wait "event"
-  liftIO $ when (eventModifiers ev /= 0) $
-    renderWithDrawWindow dw (drawEv ev)
-  testProcess dw
+  when (eventModifiers ev /= 0) $
+    render (drawEv ev)
+  testProcess
 
-render dw x = liftIO $ renderWithDrawWindow dw x
+render :: Cairo.Render () -> GtkP ()
+render x = do
+  Context {..} <- ask
+  liftIO $ Gtk.renderWithDrawWindow ctxDrawWindow x
+  h <- liftIO $ Gtk.drawWindowGetWidth ctxDrawWindow
+  w <- liftIO $ Gtk.drawWindowGetHeight ctxDrawWindow
+  liftIO $ Gtk.widgetQueueDrawArea ctxCanvas 0 0 200 200
 
-strokeProcess dw source c = do
-  render dw $ drawStroke c
+strokeProcess :: Source -> [PointerCoord] -> GtkP [PointerCoord]
+strokeProcess source c = do
+  render $ drawStroke c
   ev <- wait "next stroke point"
   case eventSource ev == source of
-    False -> strokeProcess dw source c -- ignore events from another source
+    False -> strokeProcess source c -- ignore events from another source
     True -> case eventType ev of
-      Event.Release -> return () -- done
-      _ -> strokeProcess dw source (eventCoord ev:c)
+      Event.Release -> return c -- done
+      _ -> strokeProcess source (eventCoord ev:c)
 
+strokeProcessStart :: Source -> GtkP ()
+strokeProcessStart source = do
+  canvas <- ctxCanvas <$> ask
+  liftIO $ Gtk.widgetGrabFocus canvas
+  strk <- strokeProcess source []
+  -- storeStroke strk
+  return ()
 
-{-
-strokeProcess ps'@(p1:ps)  = do
-  drawStroke ps'
-  ev <- waitEvent
-  case evType ev of
-    EMotion -> do
-      let p0 = pos ev
-          d = norm $ p1 - p0
-      if d > 0.1
-         then strokeProcess (p0:p1:ps)
-         else strokeProcess ps'
-    ERelease -> do
-      return ps'
-
-
-strokeProcessStart = do
-  grabFocus
-  strk <- strokeProcess
-  storeStroke strk
-
+mainProcess :: GtkP ()
 mainProcess = do
-  ev <- waitEvent
-  case evType ev of
-    EButton -> strokeProcess (pos ev)
+  ev <- wait "top-level"
+  case ev of
+    Event {eventType = Press, eventButton = 0} -> strokeProcessStart (eventSource ev)
     _ -> mainProcess
 
--}

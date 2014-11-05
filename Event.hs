@@ -1,5 +1,3 @@
-
-
 module Event where
 
 import Data.Word

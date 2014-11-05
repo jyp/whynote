@@ -1,8 +1,16 @@
 module Render where
 
-import qualified Graphics.Rendering.Cairo as Cairo
+import Graphics.Rendering.Cairo as Cairo
 import Event
-import           Control.Monad 
+import Control.Monad 
+
+drawEv :: Event -> Render ()
+drawEv ev@Event{eventCoord = PointerCoord x y z t} = do
+    setSourceRGB 0 0 0
+    setLineWidth 2
+    moveTo x y
+    arc x y (2 * z) 0 3
+    stroke
 
 
 drawStroke :: [PointerCoord] -> Cairo.Render ()
