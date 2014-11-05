@@ -2,6 +2,7 @@ module App where
 
 import Event
 import Process
+import Render
 import Graphics.UI.Gtk as Gtk
 import Graphics.Rendering.Cairo as Cairo hiding (liftIO)
 import Control.Monad
@@ -20,6 +21,18 @@ testProcess dw = do
   liftIO $ when (eventModifiers ev /= 0) $
     renderWithDrawWindow dw (drawEv ev)
   testProcess dw
+
+render dw x = liftIO $ renderWithDrawWindow dw x
+
+strokeProcess dw source c = do
+  render dw $ drawStroke c
+  ev <- wait "next stroke point"
+  case eventSource ev == source of
+    False -> strokeProcess dw source c -- ignore events from another source
+    True -> case eventType ev of
+      Event.Release -> return () -- done
+      _ -> strokeProcess dw source (eventCoord ev:c)
+
 
 {-
 strokeProcess ps'@(p1:ps)  = do
