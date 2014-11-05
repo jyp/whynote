@@ -4,13 +4,8 @@
 -- |
 -- Module      : Hoodle.Device 
 -- Copyright   : (c) 2011-2013 Ian-Woo Kim
+-- Copyright   : (c) 2014 JP Bernardy
 --
--- License     : BSD3
--- Maintainer  : Ian-Woo Kim <ianwookim@gmail.com>
--- Stability   : experimental
--- Portability : GHC
---
------------------------------------------------------------------------------
 
 #include <gtk/gtk.h>
 #include "template-hsc-gtk2hs.h"
@@ -26,46 +21,26 @@ import Foreign.Marshal.Utils
 import Foreign.Ptr
 import Foreign.ForeignPtr
 import Foreign.Storable
-import Graphics.UI.Gtk
+import Graphics.UI.Gtk as Gtk
 import Unsafe.Coerce
+import Data.Word
+import Event
 --
 import Graphics.UI.Gtk.Abstract.Widget
--- | 
-data PointerType = Core | Stylus | Eraser | Touch 
-                 deriving (Show,Eq,Ord)
 
--- |
-data PenButton = PenButton1 | PenButton2 | PenButton3 | EraserButton | TouchButton | Unknown
-               deriving (Show,Eq,Ord)
-
--- | 
-
-data DeviceList = DeviceList { dev_core       :: CInt
-                             , dev_stylus     :: CInt
+data DeviceList = DeviceList { dev_stylus     :: CInt
                              , dev_eraser     :: CInt
                              , dev_touch      :: CInt
                              } 
                 deriving Show 
-                  
--- | 
-
-data PointerCoord = PointerCoord { pointerType :: PointerType 
-                                 , pointerX :: Double 
-                                 , pointerY :: Double 
-                                 , pointerZ :: Double
-                                 } 
-                  | NoPointerCoord
-                  deriving (Show,Eq,Ord)
 
 -- | 
 foreign import ccall "c_initdevice.h initdevice" c_initdevice
   ::
      Ptr Widget -- ^ widget
-  -> Ptr CInt -- ^ core 
   -> Ptr CInt -- ^ stylus
   -> Ptr CInt -- ^ eraser
   -> Ptr CInt -- ^ touch 
-  -> CString  -- ^ core 
   -> CString  -- ^ stylus
   -> CString  -- ^ eraser
   -> CString  -- ^ touch 
@@ -78,23 +53,20 @@ foreign import ccall "gdk_event_get_source_device" gdk_event_get_source_device
 -- | 
 initDevice :: Widget -> Config.WNConfig -> IO DeviceList  
 initDevice widget (Config.WNConfig{..}) =
- withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w ->
-  with 0 $ \pcore ->
+  withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w ->
     with 0 $ \pstylus ->
       with 0 $ \peraser ->
         with 0 $ \ptouch -> do
-          pcorename <- newCString core
           pstylusname <- newCString stylus
           perasername <- newCString eraser
-          ptouchname <- newCString touch 
+          ptouchname <- newCString touch
 
-          c_initdevice w pcore pstylus peraser ptouch pcorename pstylusname perasername ptouchname
+          c_initdevice w pstylus peraser ptouch pstylusname perasername ptouchname
 
-          core_val <- peek pcore
           stylus_val <- peek pstylus
           eraser_val <- peek peraser
           touch_val <- peek ptouch
-          return $ DeviceList core_val stylus_val eraser_val touch_val
+          return $ DeviceList stylus_val eraser_val touch_val
 
 class HasCoords t
 
@@ -103,23 +75,15 @@ instance HasCoords EMotion
 
 
 -- |
-getPointer :: DeviceList -> Ptr t -> IO (PenButton,PointerCoord)
+getPointer :: DeviceList -> Ptr t -> IO Event
 getPointer devlst ptr = do
     let dev = gdk_event_get_source_device ptr
-    (_ty,btn,x,y,axf) <- getInfo ptr
-    pcoord <- coord x y dev axf 
-    let rbtn = case pointerType pcoord of 
-          Eraser -> EraserButton
-          Touch  -> TouchButton
-          _ -> case btn of
-                 1 -> PenButton1
-                 2 -> PenButton2 
-                 3 -> PenButton3
-                 _ -> Unknown
-    return (rbtn, pcoord)
+    (_ty,btn,modifiers,x,y,axf,typ,time) <- getInfo ptr
+    (source,pcoord) <- coord x y dev axf
+    return $ Event source (fromIntegral btn) modifiers typ pcoord {pointerT = time}
   where
-    getInfo :: Ptr t -> IO (Int32, Int32, Double, Double, Ptr CDouble)
-    getInfo ptr = do 
+    getInfo :: Ptr t -> IO (Int32, Int32, Word32, Double, Double, Ptr CDouble,EventType,TimeStamp)
+    getInfo ptr = do
       (ty :: #{gtk2hs_type GdkEventType}) <- peek (castPtr ptr)
       if ty `elem` [ #{const GDK_BUTTON_PRESS}
                    , #{const GDK_2BUTTON_PRESS}
@@ -130,35 +94,36 @@ getPointer devlst ptr = do
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventButton, y} ptr
           (btn :: #{gtk2hs_type gint}) <- #{peek GdkEventButton, button} ptr
           axis <- #{peek GdkEventButton, axes} ptr
-          return (ty,btn,realToFrac x,realToFrac y,axis)
-        else if ty `elem` [ #{const GDK_MOTION_NOTIFY} ] 
+          mods <- #{peek GdkEventButton, state} ptr
+          time <- #{peek GdkEventButton, time} ptr
+          return (ty,btn,mods,realToFrac x,realToFrac y,axis,
+                  if ty == #{const GDK_BUTTON_RELEASE} then Event.Release else Press,
+                  time)
+        else if ty `elem` [ #{const GDK_MOTION_NOTIFY} ]
         then do
           (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventMotion, x} ptr
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventMotion, y} ptr
-          axis <- #{peek GdkEventButton, axes} ptr
-          return (ty,0,realToFrac x, realToFrac y,axis)
+          axis <- #{peek GdkEventMotion, axes} ptr
+          mods <- #{peek GdkEventButton, state} ptr
+          time <- #{peek GdkEventMotion, time} ptr
+          return (ty,0,mods,realToFrac x, realToFrac y,axis,Motion,time)
         else error ("eventCoordinates: none for event type "++show ty)
-    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO PointerCoord
+    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,PointerCoord)
     coord x y device ptrax
-          | device == dev_stylus devlst = do 
+          | device == dev_stylus devlst = do
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16
-            return $ (PointerCoord Stylus wacomx wacomy wacomz)
-          | device == dev_eraser devlst = do 
+            return $ (Stylus,PointerCoord wacomx wacomy wacomz 0)
+          | device == dev_eraser devlst = do
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
-            (wacomz :: Double) <- peekByteOff ptrax 16 
-            return $ (PointerCoord Eraser wacomx wacomy wacomz)
+            (wacomz :: Double) <- peekByteOff ptrax 16
+            return $ (Eraser,PointerCoord wacomx wacomy wacomz 0)
             -- Touch may be provided by touch screen -- not wacom device -- so no pressure here.
           | device == dev_touch devlst =
-             return $ PointerCoord Touch x y 1.0
-          --   (touchx :: Double) <- peekByteOff ptrax 0
-          --   (touchy :: Double) <- peekByteOff ptrax 8
-          --   (touchz :: Double) <- peekByteOff ptrax 16 
-          --   -- (touchw :: Double) <- peekByteOff ptrax 24
-          --   return $ (PointerCoord Touch touchx touchy touchz)            
-          | otherwise = return $ PointerCoord Core x y 1.0
+             return $ (Touch,PointerCoord x y 1.0 0)
+          | otherwise = return $ (Core,PointerCoord x y 1.0 0)
 type Device = CInt
 
 {-

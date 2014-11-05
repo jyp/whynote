@@ -1,22 +1,47 @@
-{-# LANGUAGE GADTs #-}
+{-# LANGUAGE GADTs, RankNTypes #-}
 module Process where
 
-import Foreign
+import Event
+import Control.Monad.IO.Class
 
-data Process x where
-  Wait :: String -> (Ptr t -> Process x) -> Process x
-  Do :: IO a -> (a -> Process x) -> Process x
-  Done :: x -> Process x
+data Process where
+  Wait :: String -> (Event -> Process) -> Process
+  Do :: IO a -> (a -> Process) -> Process
+  Done :: Process
 
-instance Monad Process where
-  return = Done
-  Do x k >>= f = Do x $ \a -> (k a >>= f)
-  Wait s k >>= f = Wait s (\a -> k a >>= f)
+instance Show Process where
+  show Done = "<DONE>"
+  show (Do _ _) = "<DO>"
+  show (Wait s _) = "<WAIT " ++ s ++ ">"
 
+newtype P x = P {fromP :: (x -> Process) -> Process}
 
-waitEv :: String -> (Ptr t -> Bool) -> (Ptr t -> Process x) -> Process x
-waitEv msg p k = do
-  Wait msg $ \ev -> case p ev of
-    True -> k ev
-    False -> waitEv msg p k
+instance MonadIO P where
+  liftIO x = P (\k -> Do x k)
 
+instance Monad P where
+  return x = P (\k -> k x)
+  P a >>= f = P (\k -> a (\a' -> fromP  (f a') k))
+
+wait :: String -> P Event
+wait s = P $ \k -> Wait s k
+
+waitP :: String -> (Event -> Bool) -> P Event
+waitP s p = do
+  ev <- wait s
+  if p ev
+     then return ev
+     else waitP s p
+
+run :: P () -> Process
+run (P x) = x (\_ -> Done)
+
+exec :: Process -> IO Process
+exec (Do x k) = do
+  x' <- x
+  exec (k x')
+exec p = return p
+
+resume :: Process -> Event -> IO Process
+resume (Wait _ k) ev = exec (k ev)
+resume done _ = return done

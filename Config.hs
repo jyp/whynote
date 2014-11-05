@@ -1,10 +1,17 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Config where
 
-data WNConfig = WNConfig {core,touch,stylus,eraser :: String}
+import Data.Configurator.Types
+import Data.Configurator
+import Control.Applicative
 
-wnConfig = WNConfig
-                {core = "SynPS/2 Synaptics TouchPad"
-                ,touch = "ELAN Touchscreen"
-                ,stylus = "Wacom ISDv4 EC Pen stylus"
-                ,eraser = "Wacom ISDv4 EC Pen eraser"
-                }
+data WNConfig = WNConfig {touch,stylus,eraser :: String}
+
+
+loadConfig :: IO WNConfig
+loadConfig = do
+  cfg <- load [Required "$(HOME)/.whynote"]
+  
+  WNConfig <$> require  cfg "device.touch"
+           <*> require  cfg "device.stylus"
+           <*> require  cfg "device.eraser"
