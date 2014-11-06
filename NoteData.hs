@@ -12,15 +12,33 @@ instance Num Coord where
   negate (Coord x y z t) = Coord (negate x)(negate y)(negate z)(negate t)
   Coord x0 y0 z0 t0 + Coord x1 y1 z1 t1 = Coord (x0+x1)(y0+y1)(z0+z1)(t0+t1)
 
+zero = Coord 0 0 0 0
+
+data Box = Box Coord Coord
 type Stroke = [Coord]
 type NoteData = [Stroke]
 
+emptyNoteData :: NoteData
 emptyNoteData = []
 
+unzipCoords :: [Coord] -> ([Double],[Double],[Double],[Word32])
+unzipCoords [] = ([],[],[],[])
+unzipCoords (Coord x y z t:ps) = (x:xs, y:ys, z:zs, t:ts)
+  where (xs,ys,zs,ts) = unzipCoords ps
+
+boundingBox :: Stroke -> Box
+boundingBox [] = Box zero zero
+boundingBox ps = Box (Coord (minimum xs)(minimum ys)(minimum zs)(minimum ts))
+                     (Coord (maximum xs)(maximum ys)(maximum zs)(maximum ts))
+  where (xs,ys,zs,ts) = unzipCoords ps
+
+-- | Quadrand where the coord lies
 quadrant :: Coord -> Int
 quadrant (Coord x y _ _) = if x > 0
                               then if y > 0 then 0 else 3
                               else if y > 0 then 1 else 2
+
+-- | Quadrant variation
 diffQuadr x y | z < negate 2 = z + 4
               | z > 2 = z - 4
               | otherwise = z
