@@ -1,6 +1,7 @@
 {-# LANGUAGE RecordWildCards #-}
 module App where
 
+import NoteData
 import Event
 import GtkProcess
 import Process
@@ -34,7 +35,7 @@ render x = do
   liftIO $ writeIORef ctxRender x
   invalidate
 
-strokeProcess :: Source -> [PointerCoord] -> GtkP [PointerCoord]
+strokeProcess :: Source -> [Coord] -> GtkP [Coord]
 strokeProcess source c = do
   render $ drawStroke c
   ev <- wait "next stroke point"
@@ -50,8 +51,33 @@ strokeProcessStart source = do
   Context {..} <- ask
   liftIO $ Gtk.widgetGrabFocus ctxCanvas
   strk <- strokeProcess source []
-  liftIO $ modifyIORef ctxNoteData (strk:)
+  liftIO $ do
+    modifyIORef ctxNoteData (strk:)
+    writeIORef ctxRender $ return ()
   return ()
+
+lassoProcessLoop :: Source -> [Coord] -> GtkP [Coord]
+lassoProcessLoop source c = do
+  render $ drawLasso c
+  ev <- wait "next lasso point"
+  case eventSource ev == source of
+    False -> lassoProcessLoop source c -- ignore events from another source
+    True -> case ev of
+      Event {eventType  = Event.Release} -> return c
+      Event {eventModifiers = 0} -> return c -- motion without any pressed key
+      _ -> lassoProcessLoop source (eventCoord ev:c)
+
+lassoProcessStart :: Source -> GtkP ()
+lassoProcessStart source = do
+  Context {..} <- ask
+  liftIO $ Gtk.widgetGrabFocus ctxCanvas
+  lasso <- lassoProcessLoop source []
+  liftIO $ do
+    modifyIORef ctxNoteData (strokesOutside lasso)
+    writeIORef ctxRender $ return ()
+  invalidate
+  return ()
+
 
 mainProcess :: GtkP ()
 mainProcess = do
@@ -60,6 +86,10 @@ mainProcess = do
   case ev of
     Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
       strokeProcessStart (eventSource ev)
+      mainProcess
+    Event {eventSource = Stylus,eventModifiers=1024,..} | coordZ eventCoord > 0.01  -> do
+      liftIO $ print $ ev
+      lassoProcessStart (eventSource ev)
       mainProcess
     _ -> mainProcess
 

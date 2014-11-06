@@ -25,12 +25,14 @@ import Graphics.UI.Gtk as Gtk
 import Unsafe.Coerce
 import Data.Word
 import Event
+import NoteData
 --
 import Graphics.UI.Gtk.Abstract.Widget
 
-data DeviceList = DeviceList { dev_stylus     :: CInt
-                             , dev_eraser     :: CInt
-                             , dev_touch      :: CInt
+type Device = CInt
+data DeviceList = DeviceList { dev_stylus     :: Device
+                             , dev_eraser     :: Device
+                             , dev_touch      :: Device
                              } 
                 deriving Show 
 
@@ -38,9 +40,9 @@ data DeviceList = DeviceList { dev_stylus     :: CInt
 foreign import ccall "c_initdevice.h initdevice" c_initdevice
   ::
      Ptr Widget -- ^ widget
-  -> Ptr CInt -- ^ stylus
-  -> Ptr CInt -- ^ eraser
-  -> Ptr CInt -- ^ touch 
+  -> Ptr Device -- ^ stylus
+  -> Ptr Device -- ^ eraser
+  -> Ptr Device -- ^ touch 
   -> CString  -- ^ stylus
   -> CString  -- ^ eraser
   -> CString  -- ^ touch 
@@ -80,7 +82,7 @@ getPointer devlst ptr = do
     let dev = gdk_event_get_source_device ptr
     (_ty,btn,modifiers,x,y,axf,typ,time) <- getInfo ptr
     (source,pcoord) <- coord x y dev axf
-    return $ Event source (fromIntegral btn) modifiers typ pcoord {pointerT = time}
+    return $ Event source (fromIntegral btn) modifiers typ pcoord {coordT = time}
   where
     getInfo :: Ptr t -> IO (Int32, Int32, Word32, Double, Double, Ptr CDouble,EventType,TimeStamp)
     getInfo ptr = do
@@ -108,47 +110,21 @@ getPointer devlst ptr = do
           time <- #{peek GdkEventMotion, time} ptr
           return (ty,0,mods,realToFrac x, realToFrac y,axis,Motion,time)
         else error ("eventCoordinates: none for event type "++show ty)
-    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,PointerCoord)
+    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,Coord)
     coord x y device ptrax
           | device == dev_stylus devlst = do
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16
-            return $ (Stylus,PointerCoord wacomx wacomy wacomz 0)
+            return $ (Stylus,Coord wacomx wacomy wacomz 0)
           | device == dev_eraser devlst = do
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16
-            return $ (Eraser,PointerCoord wacomx wacomy wacomz 0)
+            return $ (Eraser,Coord wacomx wacomy wacomz 0)
             -- Touch may be provided by touch screen -- not wacom device -- so no pressure here.
           | device == dev_touch devlst =
-             return $ (Touch,PointerCoord x y 1.0 0)
-          | otherwise = return $ (Core,PointerCoord x y 1.0 0)
-type Device = CInt
+             return $ (Touch,Coord x y 1.0 0)
+          | otherwise = return $ (Core,Coord x y 1.0 0)
 
-{-
--- | 
-    
-wacomCoordConvert :: WidgetClass self => self 
-                     -> (Double,Double) 
-                     -> IO (Double,Double)
-wacomCoordConvert canvas (x,y)= do 
-  win <- widgetGetDrawWindow canvas
-  (x0,y0) <- drawWindowGetOrigin win
-  screen <- widgetGetScreen canvas
-  (ws,hs) <- (,) <$> screenGetWidth screen <*> screenGetHeight screen
-  return (fromIntegral ws*x-fromIntegral x0,fromIntegral hs*y-fromIntegral y0)
-  
--- | 
-  
-wacomPConvert ::  WidgetClass self => self 
-                  -> PointerCoord 
-                  -> IO (Double,Double)
-wacomPConvert canvas pcoord = do 
- let (px,py) = (,) <$> pointerX <*> pointerY $ pcoord  
- case pointerType pcoord of 
-   Core -> return (px,py)
-   _ -> do 
-     wacomCoordConvert canvas (px,py)
 
--}
