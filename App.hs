@@ -36,6 +36,7 @@ screenCoords (Coord x y _ _) = do
   return (round x, round y)
 
 extra = Coord 5 5 0 0
+
 invalidate :: Box -> GtkP ()
 invalidate (Box p0 p1)= do
   Ctx {..} <- ask
@@ -93,6 +94,30 @@ lassoProcessStart source = do
   invalidate $ boundingBox lasso
   return ()
 
+eraseNear :: Coord -> GtkP ()
+eraseNear p = do
+  (erased,kept) <- partitionStrokesNear 100 p <$> use stNoteData
+  invalidate $ boxUnion $ map boundingBox erased
+  stNoteData .= kept
+  
+eraseProcessLoop :: Source -> GtkP ()
+eraseProcessLoop source = do
+  ev <- wait "next erase point"
+  case eventSource ev == source of
+    False -> eraseProcessLoop source -- ignore events from another source
+    True -> case ev of
+      Event {eventType  = Event.Release} -> return ()
+      Event {eventModifiers = 0} -> return () -- motion without any pressed key
+      _ -> do eraseNear (eventCoord ev)
+              eraseProcessLoop source
+
+eraseProcess :: Source -> GtkP ()
+eraseProcess source = do
+  stRender .= return ()
+  Ctx {..} <- ask
+  liftIO $ Gtk.widgetGrabFocus _ctxCanvas
+  eraseProcessLoop source
+  return ()
 
 mainProcess :: GtkP ()
 mainProcess = do
@@ -101,6 +126,10 @@ mainProcess = do
   case ev of
     Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
       strokeProcessStart (eventSource ev)
+      mainProcess
+    Event {eventSource = Eraser,eventType = Press, eventButton = 1} -> do
+      eraseNear (eventCoord ev)
+      eraseProcess (eventSource ev)
       mainProcess
     Event {eventSource = Stylus,eventModifiers=1024,..} | coordZ eventCoord > 0.01  -> do
       liftIO $ print $ ev

@@ -1,5 +1,6 @@
 module NoteData where
 
+import Data.List
 import Data.Word
 data Coord = Coord { coordX :: Double
                    , coordY :: Double
@@ -25,6 +26,14 @@ unzipCoords :: [Coord] -> ([Double],[Double],[Double],[Word32])
 unzipCoords [] = ([],[],[],[])
 unzipCoords (Coord x y z t:ps) = (x:xs, y:ys, z:zs, t:ts)
   where (xs,ys,zs,ts) = unzipCoords ps
+
+boxCoords :: Box -> (Coord,Coord)
+boxCoords (Box p1 p2) = (p1,p2)
+
+boxUnion :: [Box] -> Box
+boxUnion boxes = boundingBox (xs ++ ys)
+  where (xs,ys) = unzip $ map boxCoords $ boxes
+
 
 boundingBox :: Stroke -> Box
 boundingBox [] = Box zero zero
@@ -58,3 +67,10 @@ s1 `strokeInside` s2 = all (`pointInside` s2) s1
 
 strokesOutside :: Stroke -> [Stroke] -> [Stroke]
 strokesOutside strk = filter (not . (`strokeInside` strk))
+
+pointNear d2 p1 p2 = dx*dx + dy*dy < d2
+  where Coord dx dy _ _ = p2 - p1
+      
+strokeNear d2 p strk = any (pointNear d2 p) strk
+
+partitionStrokesNear d2 p strks = partition (strokeNear d2 p) strks
