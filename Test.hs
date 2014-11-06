@@ -2,7 +2,7 @@ import Graphics.UI.Gtk
 import Graphics.Rendering.Cairo
 import Device
 import Render
-import Drawing
+import NoteData
 import Control.Monad.Reader
 import Config
 import Process
@@ -27,7 +27,7 @@ main = do
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
      render <- newIORef $ return ()
-     scribbles <- newIORef emptyScribbles
+     scribbles <- newIORef emptyNoteData
      let ctx = Context drawin canvas render scribbles
      setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup
@@ -43,7 +43,7 @@ main = do
          moveTo 0 20
          showText $ show state
          tmpS
-         renderScribbles s
+         renderNoteData s
        return ()
 
      let handleEvent :: EventM t Bool

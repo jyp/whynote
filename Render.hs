@@ -3,7 +3,7 @@ module Render where
 import Graphics.Rendering.Cairo as Cairo
 import Event
 import Control.Monad 
-import Drawing
+import NoteData
 
 drawEv :: Event -> Render ()
 drawEv ev@Event{eventCoord = PointerCoord x y z t} = do
@@ -50,5 +50,5 @@ drawVWStrokeCurve (phead@(PointerCoord xo yo _z0 _t0) : xs) = do
                Prelude.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
 
-renderScribbles :: Scribbles -> Render ()
-renderScribbles cs = forM_ cs drawStroke
+renderNoteData :: NoteData -> Render ()
+renderNoteData cs = forM_ cs drawStroke

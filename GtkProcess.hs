@@ -8,13 +8,13 @@ import Control.Monad.Reader
 import Control.Applicative
 import Event
 import Data.IORef
-import Drawing
+import NoteData
 
 data Context
   = Context { ctxDrawWindow :: DrawWindow
             , ctxCanvas :: DrawingArea
             , ctxRender :: IORef (Render ())
-            , ctxScribbles :: IORef Scribbles
+            , ctxNoteData :: IORef NoteData
             }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Context (P Event) a}
