@@ -11,6 +11,9 @@ import GtkProcess
 import App
 import Data.IORef
 
+touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
+touchEvent = Signal (eventM "touch_event" [TouchMask])
+
 main :: IO ()
 main = do
      initGUI
@@ -31,7 +34,7 @@ main = do
      setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup
 
-     widgetAddEvents canvas [TouchMask, PointerMotionMask]
+     widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
        Wait (St {..}) msg _ <- readIORef continuation
@@ -47,6 +50,7 @@ main = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
+             print ev'
              oldState <- readIORef continuation
              newState <- resume oldState ev'
              -- print ev'
@@ -54,6 +58,9 @@ main = do
              writeIORef continuation newState
            return True
 
+     on canvas touchEvent $ do
+       liftIO $ putStrLn "TOUCH"
+       return True
      on canvas motionNotifyEvent handleEvent
      on canvas buttonPressEvent handleEvent
 

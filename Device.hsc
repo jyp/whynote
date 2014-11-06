@@ -26,6 +26,7 @@ import Unsafe.Coerce
 import Data.Word
 import Event
 import NoteData
+import System.Glib.GError
 --
 import Graphics.UI.Gtk.Abstract.Widget
 
@@ -35,6 +36,26 @@ data DeviceList = DeviceList { dev_stylus     :: Device
                              , dev_touch      :: Device
                              } 
                 deriving Show 
+
+connect_PTR__BOOL :: 
+  GObjectClass obj => SignalName ->
+  ConnectAfter -> obj ->
+  (Ptr a -> IO Bool) ->
+  IO (ConnectId obj)
+connect_PTR__BOOL signal after obj user =
+  connectGeneric signal after obj action
+  where action :: Ptr GObject -> Ptr () -> IO Bool
+        action _ ptr1 =
+          failOnGError $
+          user (castPtr ptr1)
+
+eventM :: WidgetClass w => SignalName -> [EventMask] ->
+  ConnectAfter -> w -> (EventM t Bool) -> IO (ConnectId w)
+eventM name eMask after obj fun = do
+  id <- connect_PTR__BOOL name after obj (runReaderT fun)
+  widgetAddEvents obj eMask
+  return id
+
 
 -- | 
 foreign import ccall "c_initdevice.h initdevice" c_initdevice
