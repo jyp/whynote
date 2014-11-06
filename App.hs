@@ -12,7 +12,7 @@ import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Control.Applicative
-import Data.IORef
+import Control.Lens
 
 testProcess :: GtkP ()
 testProcess = do
@@ -24,11 +24,11 @@ testProcess = do
 
 invalidateAll :: GtkP ()
 invalidateAll = do
-  Context {..} <- ask
+  Ctx {..} <- ask
   liftIO $ do
-    w <- liftIO $ Gtk.drawWindowGetWidth ctxDrawWindow
-    h <- liftIO $ Gtk.drawWindowGetHeight ctxDrawWindow
-    Gtk.drawWindowInvalidateRect ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
+    w <- liftIO $ Gtk.drawWindowGetWidth _ctxDrawWindow
+    h <- liftIO $ Gtk.drawWindowGetHeight _ctxDrawWindow
+    Gtk.drawWindowInvalidateRect _ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
 
 screenCoords :: Coord -> GtkP (Int,Int)
 screenCoords (Coord x y _ _) = do
@@ -38,18 +38,17 @@ screenCoords (Coord x y _ _) = do
 extra = Coord 5 5 0 0
 invalidate :: Box -> GtkP ()
 invalidate (Box p0 p1)= do
-  Context {..} <- ask
+  Ctx {..} <- ask
   (x0,y0) <- screenCoords (p0 - extra)
   (x1,y1) <- screenCoords (p1 + extra)
   let rect = (Gtk.Rectangle x0 y0 (x1-x0) (y1-y0))
   liftIO $ do
-    print rect
-    Gtk.drawWindowInvalidateRect ctxDrawWindow rect False
+    Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
 
 render :: Cairo.Render () -> GtkP ()
 render x = do
-  Context {..} <- ask
-  liftIO $ writeIORef ctxRender x
+  Ctx {..} <- ask
+  stRender .= x
 
 strokeProcess :: Source -> [Coord] -> GtkP [Coord]
 strokeProcess source c = do
@@ -65,12 +64,11 @@ strokeProcess source c = do
 
 strokeProcessStart :: Source -> GtkP ()
 strokeProcessStart source = do
-  Context {..} <- ask
-  liftIO $ Gtk.widgetGrabFocus ctxCanvas
+  Ctx {..} <- ask
+  liftIO $ Gtk.widgetGrabFocus _ctxCanvas
   strk <- strokeProcess source []
-  liftIO $ do
-    modifyIORef ctxNoteData (strk:)
-    writeIORef ctxRender $ return ()
+  stNoteData %= (strk:)
+  stRender .= return ()
   return ()
 
 lassoProcessLoop :: Source -> [Coord] -> GtkP [Coord]
@@ -87,19 +85,18 @@ lassoProcessLoop source c = do
 
 lassoProcessStart :: Source -> GtkP ()
 lassoProcessStart source = do
-  Context {..} <- ask
-  liftIO $ Gtk.widgetGrabFocus ctxCanvas
+  Ctx {..} <- ask
+  liftIO $ Gtk.widgetGrabFocus _ctxCanvas
   lasso <- lassoProcessLoop source []
-  liftIO $ do
-    modifyIORef ctxNoteData (strokesOutside lasso)
-    writeIORef ctxRender $ return ()
+  stNoteData %= (strokesOutside lasso)
+  stRender .= return ()
   invalidate $ boundingBox lasso
   return ()
 
 
 mainProcess :: GtkP ()
 mainProcess = do
-  Context {..} <- ask
+  Ctx {..} <- ask
   ev <- wait "top-level"
   case ev of
     Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do

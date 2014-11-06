@@ -3,47 +3,48 @@ module Process where
 
 import Control.Monad.IO.Class
 import Control.Monad.Reader
+import Control.Monad.State
 import Control.Applicative
 
 class Monad m => MonadProcess e m | m -> e where
   wait :: String -> m e
   
   
-data Process e where
-  Wait :: String -> (e -> Process e) -> Process e
-  Do :: IO a -> (a -> Process e) -> Process e
-  Done :: Process e
+data Process s e where
+  Wait :: s -> String -> (s -> e -> Process s e) -> Process s e
+  Do :: IO a -> (a -> Process s e) -> Process s e
+  Done :: Process s e
 
-instance Show (Process e) where
+instance Show (Process s e) where
   show Done = "<DONE>"
   show (Do _ _) = "<DO>"
-  show (Wait s _) = "<WAIT " ++ s ++ ">"
+  show (Wait _ s _) = "<WAIT " ++ s ++ ">"
 
-newtype P e x = P {fromP :: (x -> Process e) -> Process e}
+newtype P s e x = P {fromP :: (x -> s -> Process s e) -> s -> Process s e}
 
-instance MonadIO (P e) where
-  liftIO x = P (\k -> Do x k)
+instance MonadIO (P s e) where
+  liftIO x = P (\k s -> Do x (flip k s))
 
--- Goal : Process e
--- k : (b -> Process e)
--- f : a -> b
--- fromP x : (a -> Process e) -> Process e
-instance Functor (P e) where
+instance Functor (P s e) where
   fmap f (P x) = P $ \k -> x (k . f)
 
-instance Applicative (P e) where
+instance Applicative (P s e) where
   pure = return
   (<*>) = ap
   
-instance Monad (P e) where
+instance Monad (P s e) where
   return x = P (\k -> k x)
   P a >>= f = P (\k -> a (\a' -> fromP  (f a') k))
 
-instance MonadProcess e (P e)  where
-  wait s = P $ \k -> Wait s k
+instance MonadProcess e (P s e)  where
+  wait msg = P $ \k s -> Wait s msg (flip k)
 
 instance MonadProcess e m => MonadProcess e (ReaderT r m) where
   wait s = ReaderT (\_ -> wait s)
+
+instance MonadState s (P s e) where
+  get = P $ \k s -> k s s
+  put s' = P $ \k _s -> k () s'
 
 waitP :: MonadProcess b m => String -> (b -> Bool) -> m b
 waitP s p = do
@@ -52,16 +53,18 @@ waitP s p = do
      then return ev
      else waitP s p
 
+run :: s -> P s e a -> Process s e
+run s0 (P x) = x (\_ _ -> Done) s0
 
-run :: P e a -> Process e
-run (P x) = x (\_ -> Done)
-
-exec :: Process t -> IO (Process t)
+exec :: Process s e -> IO (Process s e)
 exec (Do x k) = do
   x' <- x
   exec (k x')
 exec p = return p
 
-resume :: Process t -> t -> IO (Process t)
-resume (Wait _ k) ev = exec (k ev)
+resume :: Process s e -> e -> IO (Process s e)
+resume (Wait s _ k) ev = exec (k s ev)
 resume done _ = return done
+
+
+

@@ -19,6 +19,7 @@ executable whynote
   build-depends: cairo
   build-depends: configurator
   build-depends: transformers
+  build-depends: lens
 
   main-is: Test.hs
   other-modules: Device

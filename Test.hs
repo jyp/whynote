@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 import Graphics.UI.Gtk
 import Graphics.Rendering.Cairo
 import Device
@@ -26,24 +27,19 @@ main = do
 
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
-     render <- newIORef $ return ()
-     scribbles <- newIORef emptyNoteData
-     let ctx = Context drawin canvas render scribbles
+     let ctx = Ctx drawin canvas
      setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup
-
 
      widgetAddEvents canvas [TouchMask, PointerMotionMask]
 
      on canvas draw $ liftIO $ do
-       state <- readIORef continuation
-       tmpS <- readIORef render
-       s <- readIORef scribbles
+       Wait (St {..}) msg _ <- readIORef continuation
        renderWithDrawWindow drawin $ do
          moveTo 0 20
-         showText $ show state
-         tmpS
-         renderNoteData s
+         showText $ msg
+         _stRender
+         renderNoteData _stNoteData
        return ()
 
      let handleEvent :: EventM t Bool
