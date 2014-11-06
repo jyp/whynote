@@ -18,8 +18,8 @@ xy f (Coord x y _ _) = f x y
 drawLasso :: [Coord] -> Cairo.Render ()
 drawLasso [] = return ()
 drawLasso (p0:ps) = do
-  Cairo.setSourceRGBA 1 0 0 0.5
-  Cairo.setFillRule Cairo.FillRuleWinding
+  Cairo.setSourceRGBA 0 0 0 0.2
+  Cairo.setFillRule Cairo.FillRuleEvenOdd
   setLineWidth 5
   moveTo `xy` p0
   forM_ ps $ \p -> lineTo `xy` p

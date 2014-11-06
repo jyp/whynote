@@ -20,7 +20,7 @@ main = do
      cfg <- loadConfig
      window <- windowNew
      set window [windowTitle := "WhyNote",
-                 windowDefaultWidth := 300, windowDefaultHeight := 200]
+                 windowDefaultWidth := 1000, windowDefaultHeight := 600]
 
      canvas <- drawingAreaNew
      set canvas [widgetCanFocus := True]
@@ -60,12 +60,10 @@ main = do
              writeIORef continuation newState
            return True
 
-     on canvas touchEvent $ do
-       liftIO $ putStrLn "TOUCH"
-       return True
+     on canvas touchEvent handleEvent
      on canvas motionNotifyEvent handleEvent
      on canvas buttonPressEvent handleEvent
 
-     on window deleteEvent $ return False
+     -- on window deleteEvent $ return False
      on window destroyEvent (do liftIO mainQuit; return True)
      mainGUI
