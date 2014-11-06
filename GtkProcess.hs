@@ -13,6 +13,7 @@ import Process hiding (wait)
 import qualified Process
 import Event
 import NoteData
+import Render
 
 data Ctx
   = Ctx { _ctxDrawWindow :: DrawWindow
@@ -26,6 +27,7 @@ type Translation = (Double,Double)
 data St =
   St { _stRender :: Render ()
      , _stNoteData :: NoteData
+     , _stSelection :: [Stroke]
      , _stTranslation :: Translation
      }
 
@@ -61,3 +63,10 @@ waitInTrans tr msg = translateEvent tr <$> Process.wait msg
 wait msg = do
   tr <- use stTranslation
   waitInTrans tr msg
+
+renderAll St{..} msg = do
+   moveTo 0 10
+   showText $ msg
+   setMatrix $ makeTranslationMatrix _stTranslation
+   _stRender
+   renderNoteData _stNoteData

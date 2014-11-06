@@ -40,13 +40,8 @@ main = do
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
-       Wait (St {..}) msg _ <- readIORef continuation
-       renderWithDrawWindow drawin $ do
-         moveTo 0 10
-         showText $ msg
-         setMatrix $ makeTranslationMatrix _stTranslation
-         _stRender
-         renderNoteData _stNoteData
+       Wait st msg _ <- readIORef continuation
+       renderWithDrawWindow drawin $ renderAll st msg
        return ()
 
      let handleEvent :: EventM t Bool

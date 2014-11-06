@@ -15,14 +15,6 @@ import Control.Lens
 import qualified Data.Map.Strict as M
 import qualified Process
 
-testProcess :: GtkP ()
-testProcess = do
-  ev <- wait "event"
-  when (eventModifiers ev /= 0) $ do
-    render (drawEv ev)
-    invalidateAll
-  testProcess
-
 invalidateAll :: GtkP ()
 invalidateAll = do
   Ctx {..} <- ask
