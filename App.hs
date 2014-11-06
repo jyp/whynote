@@ -66,7 +66,6 @@ strokeProcess source c = do
 strokeProcessStart :: Source -> GtkP ()
 strokeProcessStart source = do
   Ctx {..} <- ask
-  liftIO $ Gtk.widgetGrabFocus _ctxCanvas
   strk <- strokeProcess source []
   stNoteData %= (strk:)
   stRender .= return ()
@@ -87,7 +86,6 @@ lassoProcessLoop source c = do
 lassoProcessStart :: Source -> GtkP ()
 lassoProcessStart source = do
   Ctx {..} <- ask
-  liftIO $ Gtk.widgetGrabFocus _ctxCanvas
   lasso <- lassoProcessLoop source []
   stNoteData %= (strokesOutside lasso)
   stRender .= return ()
@@ -115,7 +113,6 @@ eraseProcess :: Source -> GtkP ()
 eraseProcess source = do
   stRender .= return ()
   Ctx {..} <- ask
-  liftIO $ Gtk.widgetGrabFocus _ctxCanvas
   eraseProcessLoop source
   return ()
 

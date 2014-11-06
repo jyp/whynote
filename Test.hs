@@ -1,5 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
-import Graphics.UI.Gtk
+import Graphics.UI.Gtk as Gtk
 import Graphics.Rendering.Cairo
 import Device
 import Render
@@ -23,6 +23,8 @@ main = do
                  windowDefaultWidth := 300, windowDefaultHeight := 200]
 
      canvas <- drawingAreaNew
+     set canvas [widgetCanFocus := True]
+     Gtk.widgetGrabFocus canvas
      devices <- initDevice (castToWidget canvas) cfg
      print devices
      containerAdd window canvas
@@ -51,10 +53,9 @@ main = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             print ev'
+             -- print ev'
              oldState <- readIORef continuation
              newState <- resume oldState ev'
-             -- print ev'
              -- print newState
              writeIORef continuation newState
            return True
