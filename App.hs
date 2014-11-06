@@ -4,7 +4,6 @@ module App where
 import NoteData
 import Event
 import GtkProcess
-import Process
 import Render
 import qualified Graphics.UI.Gtk as Gtk
 import qualified Graphics.Rendering.Cairo as Cairo
@@ -13,6 +12,8 @@ import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Control.Applicative
 import Control.Lens
+import qualified Data.Map.Strict as M
+import qualified Process
 
 testProcess :: GtkP ()
 testProcess = do
@@ -29,11 +30,6 @@ invalidateAll = do
     w <- liftIO $ Gtk.drawWindowGetWidth _ctxDrawWindow
     h <- liftIO $ Gtk.drawWindowGetHeight _ctxDrawWindow
     Gtk.drawWindowInvalidateRect _ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
-
-screenCoords :: Coord -> GtkP (Int,Int)
-screenCoords (Coord x y _ _) = do
-  -- FIXME: apply transformation matrix
-  return (round x, round y)
 
 extra = Coord 5 5 0 0
 
@@ -116,6 +112,38 @@ eraseProcess source = do
   eraseProcessLoop source
   return ()
 
+touchProcess :: Translation -> M.Map Int (Coord,Coord) -> GtkP ()
+touchProcess origTrans touches
+  | M.null touches = return ()
+  | otherwise = do
+  let cont = touchProcess origTrans
+  liftIO $ do
+    putStrLn "touches"
+    forM_ (M.assocs touches) print
+  ev <- waitInTrans origTrans "touch"
+  case eventSource ev of
+    Touch -> case () of
+      _ | eventType ev `elem` [Cancel,End]
+          -> cont $ M.delete (eventButton ev) touches
+      _ | eventType ev `elem` [Begin,Update]
+          -> case M.lookup (eventButton ev) touches of
+               Nothing -> cont $ M.insert (eventButton ev) (eventCoord ev,eventCoord ev) touches
+               Just (orig,_) -> do
+                 case M.size touches of
+                   1 -> do
+                     let (dx,dy) = xy (,) (eventCoord ev - orig)
+                         (x0,y0) = origTrans
+                     stTranslation .= (dx+x0,dy+y0)
+                     invalidateAll
+                   _ -> return ()
+                 cont $ M.insert (eventButton ev) (orig,eventCoord ev) touches
+      _ -> -- non-multi touch event
+        cont touches
+    Stylus -> do
+      liftIO $ putStrLn "rollback"
+      stTranslation .= origTrans
+    _ -> cont touches
+
 mainProcess :: GtkP ()
 mainProcess = do
   Ctx {..} <- ask
@@ -123,14 +151,16 @@ mainProcess = do
   case ev of
     Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
       strokeProcessStart (eventSource ev)
-      mainProcess
     Event {eventSource = Eraser,eventType = Press, eventButton = 1} -> do
       eraseNear (eventCoord ev)
       eraseProcess (eventSource ev)
-      mainProcess
     Event {eventSource = Stylus,eventModifiers=1024,..} | coordZ eventCoord > 0.01  -> do
-      liftIO $ print $ ev
       lassoProcessStart (eventSource ev)
-      mainProcess
-    _ -> mainProcess
+    Event {eventSource = Touch} -> do
+      liftIO $ print ev
+      when (eventType ev == Begin) $ do
+        tr <- use stTranslation
+        touchProcess tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+    _ -> return ()
+  mainProcess
 

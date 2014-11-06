@@ -42,8 +42,9 @@ main = do
      on canvas draw $ liftIO $ do
        Wait (St {..}) msg _ <- readIORef continuation
        renderWithDrawWindow drawin $ do
-         moveTo 0 20
+         moveTo 0 10
          showText $ msg
+         setMatrix $ makeTranslationMatrix _stTranslation
          _stRender
          renderNoteData _stNoteData
        return ()

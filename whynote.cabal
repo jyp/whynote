@@ -20,6 +20,7 @@ executable whynote
   build-depends: configurator
   build-depends: transformers
   build-depends: lens
+  build-depends: containers >= 0.5
 
   main-is: Test.hs
   other-modules: Device

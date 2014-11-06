@@ -7,7 +7,8 @@ import Data.Word
 data Source = Core | Stylus | Eraser | Touch
                  deriving (Show,Eq,Ord)
 
-data EventType = Press | Motion | Release | Cancel
+data EventType = Press | Motion | Release
+               | Begin | Update | End | Cancel
            deriving (Show,Eq)
 
 data Event = Event

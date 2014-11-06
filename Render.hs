@@ -13,8 +13,6 @@ drawEv ev@Event{eventCoord = Coord x y z t} = do
     arc x y (2 * z) 0 3
     stroke
 
-xy f (Coord x y _ _) = f x y
-
 drawLasso :: [Coord] -> Cairo.Render ()
 drawLasso [] = return ()
 drawLasso (p0:ps) = do

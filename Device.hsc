@@ -142,9 +142,9 @@ getPointer devlst ptr = do
         else if ty >= #{const GDK_TOUCH_BEGIN} && ty <= #{const GDK_TOUCH_CANCEL}
         then do
           let typ = case ty of
-                #{const GDK_TOUCH_BEGIN} -> Press
-                #{const GDK_TOUCH_UPDATE} -> Motion
-                #{const GDK_TOUCH_END} -> Event.Release
+                #{const GDK_TOUCH_BEGIN} -> Begin
+                #{const GDK_TOUCH_UPDATE} -> Update
+                #{const GDK_TOUCH_END} -> End
                 #{const GDK_TOUCH_CANCEL} -> Cancel
           (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventTouch, x} ptr
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventTouch, y} ptr
@@ -152,7 +152,7 @@ getPointer devlst ptr = do
           mods <- #{peek GdkEventTouch, state} ptr
           time <- #{peek GdkEventTouch, time} ptr
           sequ <- #{peek GdkEventTouch, sequence} ptr
-          return (ty,sequ,mods,realToFrac x, realToFrac y,axis,Motion,time)
+          return (ty,sequ,mods,realToFrac x, realToFrac y,axis,typ,time)
         else error ("eventCoordinates: none for event type "++show ty)
     coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,Coord)
     coord x y device ptrax

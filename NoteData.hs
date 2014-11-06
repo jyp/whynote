@@ -9,6 +9,8 @@ data Coord = Coord { coordX :: Double
                    }
            deriving (Show,Eq,Ord)
 
+xy f (Coord x y _ _) = f x y
+
 instance Num Coord where
   negate (Coord x y z t) = Coord (negate x)(negate y)(negate z)(negate t)
   Coord x0 y0 z0 t0 + Coord x1 y1 z1 t1 = Coord (x0+x1)(y0+y1)(z0+z1)(t0+t1)
