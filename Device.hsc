@@ -131,14 +131,28 @@ getPointer devlst ptr = do
           return (ty,btn,mods,realToFrac x,realToFrac y,axis,
                   if ty == #{const GDK_BUTTON_RELEASE} then Event.Release else Press,
                   time)
-        else if ty `elem` [ #{const GDK_MOTION_NOTIFY} ]
+        else if ty == #{const GDK_MOTION_NOTIFY}
         then do
           (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventMotion, x} ptr
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventMotion, y} ptr
           axis <- #{peek GdkEventMotion, axes} ptr
-          mods <- #{peek GdkEventButton, state} ptr
+          mods <- #{peek GdkEventMotion, state} ptr
           time <- #{peek GdkEventMotion, time} ptr
           return (ty,0,mods,realToFrac x, realToFrac y,axis,Motion,time)
+        else if ty >= #{const GDK_TOUCH_BEGIN} && ty <= #{const GDK_TOUCH_CANCEL}
+        then do
+          let typ = case ty of
+                #{const GDK_TOUCH_BEGIN} -> Press
+                #{const GDK_TOUCH_UPDATE} -> Motion
+                #{const GDK_TOUCH_END} -> Event.Release
+                #{const GDK_TOUCH_CANCEL} -> Cancel
+          (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventTouch, x} ptr
+          (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventTouch, y} ptr
+          axis <- #{peek GdkEventTouch, axes} ptr
+          mods <- #{peek GdkEventTouch, state} ptr
+          time <- #{peek GdkEventTouch, time} ptr
+          sequ <- #{peek GdkEventTouch, sequence} ptr
+          return (ty,sequ,mods,realToFrac x, realToFrac y,axis,Motion,time)
         else error ("eventCoordinates: none for event type "++show ty)
     coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,Coord)
     coord x y device ptrax
