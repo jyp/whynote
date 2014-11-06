@@ -30,6 +30,7 @@ main = do
 
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
+     setEventCompression drawin False
      let ctx = Ctx drawin canvas
      setup <- exec $ runGtkP ctx mainProcess
      continuation <- newIORef setup

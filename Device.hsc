@@ -73,6 +73,15 @@ foreign import ccall "c_initdevice.h initdevice" c_initdevice
 foreign import ccall "gdk_event_get_source_device" gdk_event_get_source_device
   :: Ptr t -> Device
 
+foreign import ccall "gdk_window_set_event_compression" gdk_window_set_event_compression
+  :: Ptr (DrawWindow) -> Bool -> IO ()
+
+setEventCompression :: DrawWindow -> Bool -> IO ()
+setEventCompression dw x =
+  withForeignPtr (unsafeCoerce dw :: ForeignPtr DrawWindow) $ \w ->
+    gdk_window_set_event_compression w x
+  
+
 -- | 
 initDevice :: Widget -> Config.WNConfig -> IO DeviceList  
 initDevice widget (Config.WNConfig{..}) =
