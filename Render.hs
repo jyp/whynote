@@ -50,5 +50,5 @@ drawVWStrokeCurve (phead@(PointerCoord xo yo _z0 _t0) : xs) = do
                Prelude.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
 
-renderDrawing :: Drawing -> Render ()
-renderDrawing cs = forM_ cs drawStroke
+renderScribbles :: Scribbles -> Render ()
+renderScribbles cs = forM_ cs drawStroke

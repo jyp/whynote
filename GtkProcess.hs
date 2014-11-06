@@ -14,7 +14,7 @@ data Context
   = Context { ctxDrawWindow :: DrawWindow
             , ctxCanvas :: DrawingArea
             , ctxRender :: IORef (Render ())
-            , ctxData :: IORef Drawing
+            , ctxScribbles :: IORef Scribbles
             }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Context (P Event) a}

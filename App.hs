@@ -47,10 +47,10 @@ strokeProcess source c = do
 
 strokeProcessStart :: Source -> GtkP ()
 strokeProcessStart source = do
-  canvas <- ctxCanvas <$> ask
-  liftIO $ Gtk.widgetGrabFocus canvas
+  Context {..} <- ask
+  liftIO $ Gtk.widgetGrabFocus ctxCanvas
   strk <- strokeProcess source []
-  -- storeStroke strk
+  liftIO $ modifyIORef ctxScribbles (strk:)
   return ()
 
 mainProcess :: GtkP ()
