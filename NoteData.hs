@@ -13,6 +13,9 @@ data Coord = Coord { coordX :: Double
                    }
            deriving (Show,Eq,Ord)
 
+s .>> (Coord x y z t) = Coord (s x) (s y) (s z) t
+ 
+
 xy (Coord x y _ _) f  = f x y
 
 instance Num Coord where

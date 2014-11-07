@@ -112,6 +112,11 @@ eraseProcess source = do
   eraseProcessLoop source
   return ()
 
+add cord Nothing = Just (cord,cord)
+add cord (Just (c0,_)) = Just (c0,cord)
+
+avg x y = (0.5 *) .>> (x+y)
+
 touchProcess :: Translation -> M.Map Int (Coord,Coord) -> GtkP ()
 touchProcess origTrans touches
   | M.null touches = return ()
@@ -124,18 +129,19 @@ touchProcess origTrans touches
   case eventSource ev of
     MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
-          -> cont $ M.delete (eventButton ev) touches
+          -> return ()
+             -- cont $ M.delete (eventButton ev) touches
       _ | eventType ev `elem` [Begin,Update]
-          -> case M.lookup (eventButton ev) touches of
-               Nothing -> cont $ M.insert (eventButton ev) (eventCoord ev,eventCoord ev) touches
-               Just (orig,_) -> do
-                 case M.size touches of
-                   1 -> do
-                     moveSheet origTrans (eventCoord ev - orig)
-                   _ -> return ()
-                 cont $ M.insert (eventButton ev) (orig,eventCoord ev) touches
-      _ -> -- non-multi touch event
-        cont touches
+          -> do let touches' = M.alter (add (eventCoord ev)) (eventButton ev) touches
+                liftIO $ print $ M.keys touches'
+                case M.elems touches' of
+                  [(p0,p1),(q0,q1)] -> do
+                    let a0 = avg p0 q0
+                        a1 = avg p1 q1
+                    moveSheet origTrans (a1 - a0)
+                    cont touches'
+                  _ -> cont touches'
+      _ -> cont touches
     Stylus -> rollback ev origTrans
     Eraser -> rollback ev origTrans
     _ -> cont touches
