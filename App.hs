@@ -41,7 +41,7 @@ render x = do
 
 strokeLoop :: Source -> [Coord] -> GtkP [Coord]
 strokeLoop source c = do
-  render $ drawStroke c
+  render $ drawStroke $ Stroke c
   invalidate $ boundingBox c
   ev <- wait "next stroke point"
   case eventSource ev == source of
@@ -56,7 +56,7 @@ stroke source = do
   Ctx {..} <- ask
   deselect
   strk <- strokeLoop source []
-  stNoteData %= (strk:)
+  stNoteData %= (Stroke strk:)
   stRender .= return ()
   return ()
 
@@ -68,8 +68,8 @@ lassoProcessLoop source c = do
   case eventSource ev == source of
     False -> lassoProcessLoop source c -- ignore events from another source
     True -> case ev of
-      Event {eventType  = Event.Release} -> return c
-      Event {eventModifiers = 0} -> return c -- motion without any pressed key
+      Event {eventType  = Event.Release} -> return $ c
+      Event {eventModifiers = 0} -> return $ c -- motion without any pressed key
       _ -> lassoProcessLoop source (eventCoord ev:c)
 
 deselect :: GtkP ()

@@ -23,15 +23,15 @@ drawLasso (p0:ps) = do
   forM_ ps $ \p -> xy p lineTo
   Cairo.fill
 
-drawStroke :: [Coord] -> Cairo.Render ()
-drawStroke c = do
+drawStroke :: Stroke -> Cairo.Render ()
+drawStroke (Stroke c) = do
   Cairo.setSourceRGBA 0 0 0 1
   Cairo.setFillRule Cairo.FillRuleWinding
   strokePath c
   Cairo.fill
 
-drawStrokeSelected :: [Coord] -> Cairo.Render ()
-drawStrokeSelected c = do
+drawStrokeSelected :: Stroke -> Cairo.Render ()
+drawStrokeSelected (Stroke c) = do
   strokePath c
   setLineWidth 3
   Cairo.setSourceRGBA 0.5 0.5 0.5 1

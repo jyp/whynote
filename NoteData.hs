@@ -1,4 +1,8 @@
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving #-}
 module NoteData where
+
+import Control.Applicative
+import Data.Aeson
 
 import Data.List
 import Data.Word
@@ -27,7 +31,9 @@ instance HasBox Coord where
   boundingBox c = Box c c
 
 data Box = Box Coord Coord
-type Stroke = [Coord]
+type Curve = [Coord]
+newtype Stroke = Stroke Curve
+  deriving (HasBox)
 type NoteData = [Stroke]
 
 emptyNoteData :: NoteData
@@ -63,22 +69,34 @@ diffQuadr x y | z < negate 2 = z + 4
 
 rot (x:xs) = xs ++ [x]
 
-pointInside :: Coord -> Stroke -> Bool
+pointInside :: Coord -> Curve -> Bool
 pointInside _ [] = False
 pointInside p strk = odd winding
   where qs = map (quadrant . (\p' -> p' - p)) strk
         dqs = zipWith diffQuadr qs (rot qs)
         winding = sum dqs `div` 4
 
-strokeInside :: Stroke -> Stroke -> Bool
-s1 `strokeInside` s2 = all (`pointInside` s2) s1
+strokeInside :: Stroke -> Curve -> Bool
+(Stroke s1) `strokeInside` s2 = all (`pointInside` s2) s1
 
-lassoPartitionStrokes :: Stroke -> [Stroke] -> ([Stroke],[Stroke])
+lassoPartitionStrokes :: Curve -> [Stroke] -> ([Stroke],[Stroke])
 lassoPartitionStrokes strk = partition (`strokeInside` strk)
 
 pointNear d2 p1 p2 = dx*dx + dy*dy < d2
   where Coord dx dy _ _ = p2 - p1
-      
-strokeNear d2 p strk = any (pointNear d2 p) strk
 
+strokeNear d2 p (Stroke strk) = any (pointNear d2 p) strk
+
+partitionStrokesNear :: Double -> Coord -> [Stroke] -> ([Stroke],[Stroke])
 partitionStrokesNear d2 p strks = partition (strokeNear d2 p) strks
+
+
+----
+-- Serialisation
+
+instance ToJSON Coord where
+  toJSON (Coord x y z t) = object ["x" .= x, "y" .= y, "z" .= z, "t" .= t]
+
+instance FromJSON Coord where
+  parseJSON (Object v) = Coord <$> v.: "x" <*> v.: "y" <*> v.: "z" <*> v.: "t"
+  parseJSON _ = fail "Coord object expected"
