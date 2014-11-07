@@ -36,6 +36,7 @@ $(makeLenses ''St)
 initSt :: St
 initSt = St{_stRender = return ()
            ,_stNoteData = emptyNoteData
+           ,_stSelection = []
            ,_stTranslation = (0,0)
            }
 
@@ -70,3 +71,4 @@ renderAll St{..} msg = do
    setMatrix $ makeTranslationMatrix _stTranslation
    _stRender
    renderNoteData _stNoteData
+   renderSelection _stSelection

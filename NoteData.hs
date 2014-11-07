@@ -9,13 +9,22 @@ data Coord = Coord { coordX :: Double
                    }
            deriving (Show,Eq,Ord)
 
-xy f (Coord x y _ _) = f x y
+xy (Coord x y _ _) f  = f x y
 
 instance Num Coord where
   negate (Coord x y z t) = Coord (negate x)(negate y)(negate z)(negate t)
   Coord x0 y0 z0 t0 + Coord x1 y1 z1 t1 = Coord (x0+x1)(y0+y1)(z0+z1)(t0+t1)
 
 zero = Coord 0 0 0 0
+
+class HasBox a where
+  boundingBox :: a -> Box
+
+instance HasBox a => HasBox [a] where
+  boundingBox = boxUnion . map boundingBox
+
+instance HasBox Coord where
+  boundingBox c = Box c c
 
 data Box = Box Coord Coord
 type Stroke = [Coord]
@@ -33,15 +42,12 @@ boxCoords :: Box -> (Coord,Coord)
 boxCoords (Box p1 p2) = (p1,p2)
 
 boxUnion :: [Box] -> Box
-boxUnion boxes = boundingBox (xs ++ ys)
-  where (xs,ys) = unzip $ map boxCoords $ boxes
-
-
-boundingBox :: Stroke -> Box
-boundingBox [] = Box zero zero
-boundingBox ps = Box (Coord (minimum xs)(minimum ys)(minimum zs)(minimum ts))
-                     (Coord (maximum xs)(maximum ys)(maximum zs)(maximum ts))
-  where (xs,ys,zs,ts) = unzipCoords ps
+boxUnion [] = Box zero zero
+boxUnion boxes = Box (Coord (minimum loxs)(minimum loys)(minimum lozs)(minimum lots))
+                     (Coord (maximum hixs)(maximum hiys)(maximum hizs)(maximum hits))
+  where (los,his) = unzip $ map boxCoords $ boxes
+        (loxs,loys,lozs,lots) = unzipCoords los
+        (hixs,hiys,hizs,hits) = unzipCoords his
 
 -- | Quadrand where the coord lies
 quadrant :: Coord -> Int
@@ -67,8 +73,8 @@ pointInside p strk = odd winding
 strokeInside :: Stroke -> Stroke -> Bool
 s1 `strokeInside` s2 = all (`pointInside` s2) s1
 
-strokesOutside :: Stroke -> [Stroke] -> [Stroke]
-strokesOutside strk = filter (not . (`strokeInside` strk))
+lassoPartitionStrokes :: Stroke -> [Stroke] -> ([Stroke],[Stroke])
+lassoPartitionStrokes strk = partition (`strokeInside` strk)
 
 pointNear d2 p1 p2 = dx*dx + dy*dy < d2
   where Coord dx dy _ _ = p2 - p1

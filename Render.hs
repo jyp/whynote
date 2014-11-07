@@ -19,21 +19,31 @@ drawLasso (p0:ps) = do
   Cairo.setSourceRGBA 0 0 0 0.2
   Cairo.setFillRule Cairo.FillRuleEvenOdd
   setLineWidth 5
-  moveTo `xy` p0
-  forM_ ps $ \p -> lineTo `xy` p
+  xy p0 moveTo
+  forM_ ps $ \p -> xy p lineTo
   Cairo.fill
 
 drawStroke :: [Coord] -> Cairo.Render ()
 drawStroke c = do
   Cairo.setSourceRGBA 0 0 0 1
   Cairo.setFillRule Cairo.FillRuleWinding
-  drawVWStrokeCurve c
+  strokePath c
   Cairo.fill
 
-drawVWStrokeCurve :: [Coord] -> Cairo.Render ()
-drawVWStrokeCurve [] = return ()
-drawVWStrokeCurve [_] = return ()
-drawVWStrokeCurve (phead@(Coord xo yo _z0 _t0) : xs) = do
+drawStrokeSelected :: [Coord] -> Cairo.Render ()
+drawStrokeSelected c = do
+  strokePath c
+  setLineWidth 3
+  Cairo.setSourceRGBA 0.5 0.5 0.5 1
+  strokePreserve
+  Cairo.setSourceRGBA 1 1 1 1
+  Cairo.setFillRule Cairo.FillRuleWinding
+  Cairo.fill  
+
+strokePath :: [Coord] -> Cairo.Render ()
+strokePath [] = return ()
+strokePath [_] = return ()
+strokePath (phead@(Coord xo yo _z0 _t0) : xs) = do
     Cairo.moveTo xo yo
     let (plast:rxs) = reverse xs
     foldM_ forward phead xs
@@ -60,4 +70,21 @@ drawVWStrokeCurve (phead@(Coord xo yo _z0 _t0) : xs) = do
                return pc1
 
 renderNoteData :: NoteData -> Render ()
-renderNoteData cs = forM_ cs drawStroke
+renderNoteData cs = do
+  forM_ cs drawStroke
+
+boxRectangle :: Box -> Render ()
+boxRectangle (Box lo hi) =
+  lo `xy` \lx ly ->
+  (hi-lo) `xy` 
+  rectangle lx ly
+
+renderSelection :: NoteData -> Render ()
+renderSelection cs = do
+  save
+  setDash [5,5] 0
+  setLineWidth 1
+  boxRectangle $ boundingBox cs
+  stroke
+  restore
+  forM_ cs drawStrokeSelected

@@ -39,22 +39,23 @@ render x = do
   Ctx {..} <- ask
   stRender .= x
 
-strokeProcess :: Source -> [Coord] -> GtkP [Coord]
-strokeProcess source c = do
+strokeLoop :: Source -> [Coord] -> GtkP [Coord]
+strokeLoop source c = do
   render $ drawStroke c
   invalidate $ boundingBox c
   ev <- wait "next stroke point"
   case eventSource ev == source of
-    False -> strokeProcess source c -- ignore events from another source
+    False -> strokeLoop source c -- ignore events from another source
     True -> case ev of
       Event {eventType  = Event.Release} -> return c
       Event {eventModifiers = 0} -> return c -- motion without any pressed key
-      _ -> strokeProcess source (eventCoord ev:c)
+      _ -> strokeLoop source (eventCoord ev:c)
 
-strokeProcessStart :: Source -> GtkP ()
-strokeProcessStart source = do
+stroke :: Source -> GtkP ()
+stroke source = do
   Ctx {..} <- ask
-  strk <- strokeProcess source []
+  deselect
+  strk <- strokeLoop source []
   stNoteData %= (strk:)
   stRender .= return ()
   return ()
@@ -71,13 +72,23 @@ lassoProcessLoop source c = do
       Event {eventModifiers = 0} -> return c -- motion without any pressed key
       _ -> lassoProcessLoop source (eventCoord ev:c)
 
-lassoProcessStart :: Source -> GtkP ()
-lassoProcessStart source = do
+deselect :: GtkP ()
+deselect = do
+  oldSel <- use stSelection
+  stNoteData %= (oldSel++)
+  stSelection .= []
+  invalidate $ boundingBox oldSel
+  
+lassoProcess :: Source -> GtkP ()
+lassoProcess source = do
   Ctx {..} <- ask
-  lasso <- lassoProcessLoop source []
-  stNoteData %= (strokesOutside lasso)
+  deselect
+  bounds <- lassoProcessLoop source []
   stRender .= return ()
-  invalidate $ boundingBox lasso
+  (inside,outside) <- lassoPartitionStrokes bounds <$> use stNoteData
+  stSelection .= inside
+  stNoteData .= outside
+  invalidate $ boundingBox bounds
   return ()
 
 eraseNear :: Coord -> GtkP ()
@@ -133,12 +144,11 @@ touchProcess origTrans touches
     _ -> cont touches
 
 moveSheet origTrans delta = do
-          let (dx,dy) = xy (,) delta
+          let (dx,dy) = xy delta (,)
               (x0,y0) = origTrans
           stTranslation .= (dx+x0,dy+y0)
           invalidateAll
-              
-  
+
 simpleTouchProcess :: Translation -> Coord -> GtkP ()
 simpleTouchProcess origTrans origCoord = do
   let cont = simpleTouchProcess origTrans origCoord
@@ -167,12 +177,12 @@ mainProcess = do
   liftIO $ print ev
   case ev of
     Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
-      strokeProcessStart (eventSource ev)
+      stroke (eventSource ev)
     Event {eventSource = Eraser,eventType = Press, eventButton = 1} -> do
       eraseNear (eventCoord ev)
       eraseProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | coordZ eventCoord > 0.01  -> do
-      lassoProcessStart (eventSource ev)
+      lassoProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       -- liftIO $ print ev
       when (eventType ev == Begin) $ do
