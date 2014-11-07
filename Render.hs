@@ -34,8 +34,8 @@ drawStrokeSelected :: Stroke -> Cairo.Render ()
 drawStrokeSelected (Stroke c) = do
   strokePath c
   setLineWidth 3
-  Cairo.setSourceRGBA 0.5 0.5 0.5 1
-  strokePreserve
+  -- Cairo.setSourceRGBA 0.5 0.5 0.5 1
+  -- strokePreserve
   Cairo.setSourceRGBA 1 1 1 1
   Cairo.setFillRule Cairo.FillRuleWinding
   Cairo.fill  
@@ -85,6 +85,8 @@ renderSelection cs = do
   setDash [5,5] 0
   setLineWidth 1
   boxRectangle $ boundingBox cs
-  stroke
+  strokePreserve
+  setSourceRGBA 0 0 1 0.5
+  fill
   restore
   forM_ cs drawStrokeSelected
