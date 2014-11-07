@@ -103,3 +103,10 @@ instance ToJSON Coord where
 instance FromJSON Coord where
   parseJSON (Object v) = Coord <$> v.: "x" <*> v.: "y" <*> v.: "z" <*> v.: "t"
   parseJSON _ = fail "Coord object expected"
+
+instance FromJSON Stroke where
+    parseJSON (Object a) = Stroke <$> a.: "points"
+    parseJSON _ = empty
+
+instance ToJSON Stroke where
+   toJSON (Stroke a) = object ["points" .=  a]

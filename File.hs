@@ -1,10 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 module File where
-
+import qualified Data.ByteString.Lazy as B
 import NoteData
 import Data.Aeson
 import Control.Applicative
-import Control.Monad
 
 data NoteFile = NoteFile [Coord]
 
@@ -15,9 +14,13 @@ instance FromJSON NoteFile where
 instance ToJSON NoteFile where
   toJSON (NoteFile s)= object ["strokes" .= s]
 
-instance FromJSON Stroke where
-    parseJSON (Stroke a) = Stroke <$> a.: "points"
-    parseJSON _ = empty
+readNote :: FilePath -> IO NoteFile
+readNote f = do
+  d <- eitherDecode <$> B.readFile f
+  case d of
+    Left err -> error err
+    Right r -> return r
 
-instance ToJSON Stroke where
-   toJSON (Stroke a) = object ["points" .=  a]
+writeNote :: FilePath -> NoteFile -> IO ()
+writeNote f d = do
+  B.writeFile f $ encode d
