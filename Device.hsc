@@ -181,6 +181,8 @@ getPointer devlst ptr = do
             -- Touch may be provided by touch screen -- not wacom device -- so no pressure here.
           | device == dev_touch devlst =
              return $ (Touch,Coord x y 1.0 0)
+          | device == dev_mtouch devlst =
+             return $ (MultiTouch,Coord x y 1.0 0)
           | otherwise = return $ (Core,Coord x y 1.0 0)
 
 
