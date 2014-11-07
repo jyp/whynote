@@ -36,7 +36,6 @@ invalidate (Box p0 p1)= do
 
 render :: Cairo.Render () -> GtkP ()
 render x = do
-  Ctx {..} <- ask
   stRender .= x
 
 strokeLoop :: Source -> [Coord] -> GtkP [Coord]
@@ -53,7 +52,6 @@ strokeLoop source c = do
 
 stroke :: Source -> GtkP ()
 stroke source = do
-  Ctx {..} <- ask
   deselect
   strk <- strokeLoop source []
   stNoteData %= (Stroke strk:)
@@ -81,7 +79,6 @@ deselect = do
   
 lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
-  Ctx {..} <- ask
   deselect
   bounds <- lassoProcessLoop source []
   stRender .= return ()
@@ -111,7 +108,7 @@ eraseProcessLoop source = do
 eraseProcess :: Source -> GtkP ()
 eraseProcess source = do
   stRender .= return ()
-  Ctx {..} <- ask
+  deselect
   eraseProcessLoop source
   return ()
 
@@ -175,13 +172,15 @@ mainProcess = do
   ev <- wait "top-level"
   Ctx {..} <- ask
   liftIO $ print ev
+  let pressure = coordZ $ eventCoord $ ev
+      havePressure = pressure > 0.01
   case ev of
-    Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
+    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       stroke (eventSource ev)
-    Event {eventSource = Eraser,eventType = Press, eventButton = 1} -> do
-      eraseNear (eventCoord ev)
+    Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
+      eraseNear (eventCoord)
       eraseProcess (eventSource ev)
-    Event {eventSource = Stylus,eventModifiers=1024,..} | coordZ eventCoord > 0.01  -> do
+    Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
       lassoProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       -- liftIO $ print ev
