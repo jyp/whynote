@@ -7,17 +7,19 @@ void initdevice ( GtkWidget* widget
                 , int* stylus
                 , int* eraser
 		, int* touch 
+		, int* mtouch 
                 , char* stylusname
                 , char* erasername
 		, char* touchname
+		, char* mtouchname
                 )
 {
 
  GdkDeviceManager *dev_manager = gdk_display_get_device_manager (gtk_widget_get_display (widget));
  
-  printf("initdevice : stylusname = %s\n", stylusname );
-  printf("initdevice : erasername = %s\n", erasername );
-  printf("initdevice : touchname = %s\n", touchname );
+  /* printf("initdevice : stylusname = %s\n", stylusname ); */
+  /* printf("initdevice : erasername = %s\n", erasername ); */
+  /* printf("initdevice : touchname = %s\n", touchname ); */
 
   GList* dev_list;
   GdkDevice* device;
@@ -30,7 +32,6 @@ void initdevice ( GtkWidget* widget
     {
       /* gdk_device_set_axis_use(device, 0, GDK_AXIS_IGNORE); */
       /* gdk_device_set_axis_use(device, 1, GDK_AXIS_IGNORE); */
-      /* gdk_device_set_mode(device, GDK_MODE_SCREEN); */
 
       // printf("This is xinput device %s \n", device -> name);
       if( !strcmp (gdk_device_get_name (device), stylusname) ) {
@@ -44,6 +45,11 @@ void initdevice ( GtkWidget* widget
       if( !strcmp (gdk_device_get_name (device), touchname) ) { 
         // printf("got eraser\n");
         (*touch) = (int) device;
+        gdk_device_set_mode(device, GDK_MODE_SCREEN);
+      } 
+      if( !strcmp (gdk_device_get_name (device), mtouchname) ) { 
+        // printf("got eraser\n");
+        (*mtouch) = (int) device;
       } 
     } 
     dev_list = dev_list->next; 

@@ -85,7 +85,7 @@ eraseNear p = do
   (erased,kept) <- partitionStrokesNear 100 p <$> use stNoteData
   invalidate $ boxUnion $ map boundingBox erased
   stNoteData .= kept
-  
+
 eraseProcessLoop :: Source -> GtkP ()
 eraseProcessLoop source = do
   ev <- wait "next erase point"
@@ -109,12 +109,12 @@ touchProcess origTrans touches
   | M.null touches = return ()
   | otherwise = do
   let cont = touchProcess origTrans
-  liftIO $ do
-    putStrLn "touches"
-    forM_ (M.assocs touches) print
-  ev <- waitInTrans origTrans "touch"
+  -- liftIO $ do
+  --   putStrLn "touches"
+  --   forM_ (M.assocs touches) print
+  ev <- waitInTrans origTrans "multi-touch"
   case eventSource ev of
-    Touch -> case () of
+    MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
           -> cont $ M.delete (eventButton ev) touches
       _ | eventType ev `elem` [Begin,Update]
@@ -123,23 +123,48 @@ touchProcess origTrans touches
                Just (orig,_) -> do
                  case M.size touches of
                    1 -> do
-                     let (dx,dy) = xy (,) (eventCoord ev - orig)
-                         (x0,y0) = origTrans
-                     stTranslation .= (dx+x0,dy+y0)
-                     invalidateAll
+                     moveSheet origTrans (eventCoord ev - orig)
                    _ -> return ()
                  cont $ M.insert (eventButton ev) (orig,eventCoord ev) touches
       _ -> -- non-multi touch event
         cont touches
-    Stylus -> do
-      liftIO $ putStrLn "rollback"
-      stTranslation .= origTrans
+    Stylus -> rollback ev origTrans
+    Eraser -> rollback ev origTrans
     _ -> cont touches
 
+moveSheet origTrans delta = do
+          let (dx,dy) = xy (,) delta
+              (x0,y0) = origTrans
+          stTranslation .= (dx+x0,dy+y0)
+          invalidateAll
+              
+  
+simpleTouchProcess :: Translation -> Coord -> GtkP ()
+simpleTouchProcess origTrans origCoord = do
+  let cont = simpleTouchProcess origTrans origCoord
+  ev <- waitInTrans origTrans "simple-touch"
+  case eventSource ev of
+    Touch -> case () of
+      _ | eventType ev `elem` [Release]
+          -> return () -- finish
+      _ | eventType ev `elem` [Motion,Press]
+          -> do moveSheet origTrans (eventCoord ev - origCoord)
+                cont
+      _ -> -- non-multi touch event
+        cont
+    Stylus -> Process.pushBack ev
+    Eraser -> Process.pushBack ev
+    _ -> cont
+
+rollback ev origTrans = do
+  Process.pushBack ev
+  stTranslation .= origTrans
+  
 mainProcess :: GtkP ()
 mainProcess = do
-  Ctx {..} <- ask
   ev <- wait "top-level"
+  Ctx {..} <- ask
+  liftIO $ print ev
   case ev of
     Event {eventSource = Stylus,eventType = Press, eventButton = 1} -> do
       strokeProcessStart (eventSource ev)
@@ -148,11 +173,15 @@ mainProcess = do
       eraseProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | coordZ eventCoord > 0.01  -> do
       lassoProcessStart (eventSource ev)
-    Event {eventSource = Touch} -> do
-      liftIO $ print ev
+    Event {eventSource = MultiTouch} -> do
+      -- liftIO $ print ev
       when (eventType ev == Begin) $ do
         tr <- use stTranslation
         touchProcess tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+    Event {eventSource = Touch} -> do
+      when (eventType ev `elem` [Press,Motion]) $ do
+        tr <- use stTranslation
+        simpleTouchProcess tr (eventCoord ev)
     _ -> return ()
   mainProcess
 

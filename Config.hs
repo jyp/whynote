@@ -1,17 +1,21 @@
 {-# LANGUAGE OverloadedStrings #-}
-module Config where
+module Config (loadConfig, WNConfig(..)) where
 
 import Data.Configurator.Types
-import Data.Configurator
+import Data.Configurator as Conf
 import Control.Applicative
+import Data.String
 
-data WNConfig = WNConfig {touch,stylus,eraser :: String}
+data WNConfig = WNConfig {touch,multitouch,stylus,eraser :: String}
 
+lkString :: Config -> String -> IO String
+lkString cfg s = lookupDefault (fromString s) cfg (fromString s)
 
 loadConfig :: IO WNConfig
 loadConfig = do
   cfg <- load [Required "$(HOME)/.whynote"]
   
-  WNConfig <$> require  cfg "device.touch"
-           <*> require  cfg "device.stylus"
-           <*> require  cfg "device.eraser"
+  WNConfig <$> lkString cfg "device.touch"
+           <*> lkString cfg "device.multitouch"
+           <*> lkString cfg "device.stylus"
+           <*> lkString cfg "device.eraser"

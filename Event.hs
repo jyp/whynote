@@ -4,7 +4,7 @@ import NoteData
 import Data.Word
 
 -- | 
-data Source = Core | Stylus | Eraser | Touch
+data Source = Core | Stylus | Eraser | MultiTouch | Touch
                  deriving (Show,Eq,Ord)
 
 data EventType = Press | Motion | Release

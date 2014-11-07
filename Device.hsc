@@ -34,6 +34,7 @@ type Device = CInt
 data DeviceList = DeviceList { dev_stylus     :: Device
                              , dev_eraser     :: Device
                              , dev_touch      :: Device
+                             , dev_mtouch     :: Device
                              } 
                 deriving Show 
 
@@ -63,16 +64,19 @@ foreign import ccall "c_initdevice.h initdevice" c_initdevice
      Ptr Widget -- ^ widget
   -> Ptr Device -- ^ stylus
   -> Ptr Device -- ^ eraser
-  -> Ptr Device -- ^ touch 
+  -> Ptr Device -- ^ touch
+  -> Ptr Device -- ^ mtouch
   -> CString  -- ^ stylus
   -> CString  -- ^ eraser
-  -> CString  -- ^ touch 
+  -> CString  -- ^ touch
+  -> CString  -- ^ mtouch
   -> IO ()
 
 
 foreign import ccall "gdk_event_get_source_device" gdk_event_get_source_device
   :: Ptr t -> Device
 
+#if 0
 foreign import ccall "gdk_window_set_event_compression" gdk_window_set_event_compression
   :: Ptr (DrawWindow) -> Bool -> IO ()
 
@@ -80,7 +84,12 @@ setEventCompression :: DrawWindow -> Bool -> IO ()
 setEventCompression dw x =
   withForeignPtr (unsafeCoerce dw :: ForeignPtr DrawWindow) $ \w ->
     gdk_window_set_event_compression w x
-  
+#else
+
+setEventCompression :: DrawWindow -> Bool -> IO ()
+setEventCompression dw x = return ()
+
+#endif
 
 -- | 
 initDevice :: Widget -> Config.WNConfig -> IO DeviceList  
@@ -88,17 +97,20 @@ initDevice widget (Config.WNConfig{..}) =
   withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w ->
     with 0 $ \pstylus ->
       with 0 $ \peraser ->
-        with 0 $ \ptouch -> do
+        with 0 $ \ptouch ->
+         with 0 $ \pmtouch -> do
           pstylusname <- newCString stylus
           perasername <- newCString eraser
           ptouchname <- newCString touch
+          pmtouchname <- newCString multitouch
 
-          c_initdevice w pstylus peraser ptouch pstylusname perasername ptouchname
+          c_initdevice w pstylus peraser ptouch pmtouch pstylusname perasername ptouchname pmtouchname
 
           stylus_val <- peek pstylus
           eraser_val <- peek peraser
           touch_val <- peek ptouch
-          return $ DeviceList stylus_val eraser_val touch_val
+          mtouch_val <- peek pmtouch
+          return $ DeviceList stylus_val eraser_val touch_val mtouch_val
 
 class HasCoords t
 

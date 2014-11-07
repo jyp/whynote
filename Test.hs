@@ -10,6 +10,8 @@ import Process
 import GtkProcess
 import App
 import Data.IORef
+import Data.Word
+import Event
 
 touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
 touchEvent = Signal (eventM "touch_event" [TouchMask])
@@ -44,16 +46,24 @@ main = do
        renderWithDrawWindow drawin $ renderAll st msg
        return ()
 
+     lastStylusTime <- newIORef (0 :: TimeStamp)
+     
      let handleEvent :: EventM t Bool
          handleEvent = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             -- print ev'
-             oldState <- readIORef continuation
-             newState <- resume oldState ev'
-             -- print newState
-             writeIORef continuation newState
+             let t = coordT . eventCoord $ ev'
+             when (eventSource ev' `elem` [Stylus,Eraser]) $ do
+               writeIORef lastStylusTime t
+             time0 <- readIORef lastStylusTime
+             unless (eventSource ev' `elem` [Touch,MultiTouch]
+                     && t - time0 < 150) $ do
+               -- print ev'
+               oldState <- readIORef continuation
+               newState <- resume oldState ev'
+               -- print newState
+               writeIORef continuation newState
            return True
 
      on canvas touchEvent handleEvent
