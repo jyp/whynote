@@ -76,7 +76,7 @@ foreign import ccall "c_initdevice.h initdevice" c_initdevice
 foreign import ccall "gdk_event_get_source_device" gdk_event_get_source_device
   :: Ptr t -> Device
 
-#if 0
+#if 1
 foreign import ccall "gdk_window_set_event_compression" gdk_window_set_event_compression
   :: Ptr (DrawWindow) -> Bool -> IO ()
 
