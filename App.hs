@@ -1,6 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module App where
 
+import qualified Prelude
+import WNPrelude
 import NoteData
 import Event
 import GtkProcess
@@ -115,7 +117,12 @@ eraseProcess source = do
 add cord Nothing = Just (cord,cord)
 add cord (Just (c0,_)) = Just (c0,cord)
 
-avg x y = (0.5 *) .>> (x+y)
+avg x y = average [x,y]
+average xs = ((1/fromIntegral (length xs)) *) .>> foldr (+) zero xs
+-- 
+norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
+dist a b = sqrt (norm2 (a-b))
+peri a b c = dist a b + dist b c + dist c a
 
 touchProcess :: Translation -> M.Map Int (Coord,Coord) -> GtkP ()
 touchProcess origTrans touches
@@ -140,6 +147,12 @@ touchProcess origTrans touches
                         a1 = avg p1 q1
                     moveSheet origTrans (a1 - a0)
                     cont touches'
+                  [(p0,p1),(q0,q1),(r0,r1)] -> do
+                    let s0 = peri p0 q0 r0
+                        s1 = peri p1 q1 r1
+                        c = average [p0,q0,r0]
+                    zoomSheet origTrans c (s1 / s0+1)
+                    cont touches'
                   _ -> cont touches'
       _ -> cont touches
     Stylus -> rollback ev origTrans
@@ -148,9 +161,18 @@ touchProcess origTrans touches
 
 moveSheet origTrans delta = do
           let (dx,dy) = xy delta (,)
-              (x0,y0) = origTrans
-          stTranslation .= (dx+x0,dy+y0)
+              Translation z0 x0 y0 = origTrans
+          stTranslation .= Translation z0 (dx+x0) (dy+y0)
           invalidateAll
+
+zoomSheet origTrans center factor = do
+  let Translation z0 x0 y0 = origTrans
+      (cx,cy) = xy center (,)
+      f = z0*(1-factor)
+  stTranslation .= Translation (z0*factor) (x0 + cx*f) (y0 + cy*f)
+      -- we want: cx*z0 + x0 = cx*z0*factor + x1
+      -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
+  invalidateAll
 
 simpleTouchProcess :: Translation -> Coord -> GtkP ()
 simpleTouchProcess origTrans origCoord = do
@@ -189,7 +211,6 @@ mainProcess = do
     Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
       lassoProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
-      -- liftIO $ print ev
       when (eventType ev == Begin) $ do
         tr <- use stTranslation
         touchProcess tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)

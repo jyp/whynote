@@ -22,6 +22,7 @@ executable whynote
   build-depends: lens
   build-depends: aeson
   build-depends: containers >= 0.5
+  build-depends: yap >= 0.1
 
   main-is: Test.hs
   other-modules: Device

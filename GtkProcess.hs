@@ -22,7 +22,7 @@ data Ctx
 
 $(makeLenses ''Ctx)
 
-type Translation = (Double,Double)
+data Translation = Translation {trZoom, trX, drY :: Double}
 
 data St =
   St { _stRender :: Render ()
@@ -37,7 +37,7 @@ initSt :: St
 initSt = St{_stRender = return ()
            ,_stNoteData = emptyNoteData
            ,_stSelection = []
-           ,_stTranslation = (0,0)
+           ,_stTranslation = Translation 1 0 0
            }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
@@ -46,18 +46,18 @@ newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
 runGtkP :: Ctx -> GtkP a -> Process St Event
 runGtkP ctx (GtkP p) = run initSt (runReaderT p ctx)
 
-makeTranslationMatrix :: (Double, Double) -> Matrix
-makeTranslationMatrix (dx,dy) = Matrix 1 0 0 1 dx dy
+makeTranslationMatrix :: Translation -> Matrix
+makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
 
 -- apply the above matrix
 screenCoords :: Coord -> GtkP (Int,Int)
 screenCoords (Coord x y _ _) = do
-  (dx,dy) <- use stTranslation
-  return (round (dx + x), round (dy + y))
+  Translation z dx dy <- use stTranslation
+  return (round (dx + z*x), round (dy + z*y))
 
 translateEvent :: Translation -> Event -> Event
-translateEvent (dx,dy) Event {eventCoord = Coord{..},..} = Event{..}
-  where eventCoord = Coord{coordX = coordX - dx, coordY =  coordY - dy,..}
+translateEvent (Translation z dx dy) Event {eventCoord = Coord{..},..} = Event{..}
+  where eventCoord = Coord{coordX = (coordX - dx)/z, coordY =  (coordY - dy)/z,..}
 
 waitInTrans tr msg = translateEvent tr <$> Process.wait msg
 

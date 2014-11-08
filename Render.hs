@@ -1,5 +1,7 @@
 module Render where
 
+import qualified Prelude as P
+import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
 import Event
 import Control.Monad 
@@ -66,7 +68,7 @@ strokePath (phead@(Coord xo yo _z0 _t0) : xs) = do
                -- direction of movement, by an amount proportional to
                -- the pressure (z).
                let shift = turn $ ((1/dist) * z * zFactor) *. dp
-               Prelude.uncurry Cairo.lineTo $ shift .+. p1
+               P.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
 
 renderNoteData :: NoteData -> Render ()
