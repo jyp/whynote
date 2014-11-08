@@ -12,8 +12,7 @@ import qualified Graphics.Rendering.Cairo as Cairo
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
-import Control.Applicative
-import Control.Lens
+import Control.Lens hiding (transform)
 import qualified Data.Map.Strict as M
 import qualified Process
 
@@ -25,13 +24,12 @@ invalidateAll = do
     h <- liftIO $ Gtk.drawWindowGetHeight _ctxDrawWindow
     Gtk.drawWindowInvalidateRect _ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
 
-extra = Coord 5 5 0 0
-
 invalidate :: Box -> GtkP ()
-invalidate (Box p0 p1)= do
+invalidate b0 = do
+  let Box p0 p1 = extend 5 b0
   Ctx {..} <- ask
-  (x0,y0) <- screenCoords (p0 - extra)
-  (x1,y1) <- screenCoords (p1 + extra)
+  (x0,y0) <- screenCoords p0
+  (x1,y1) <- screenCoords p1
   let rect = (Gtk.Rectangle x0 y0 (x1-x0) (y1-y0))
   liftIO $ do
     Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
@@ -74,10 +72,10 @@ lassoProcessLoop source c = do
 
 deselect :: GtkP ()
 deselect = do
-  oldSel <- use stSelection
+  (bbox,oldSel) <- use stSelection
   stNoteData %= (oldSel++)
-  stSelection .= []
-  invalidate $ boundingBox oldSel
+  stSelection .= emptySelection
+  invalidate $ bbox
   
 lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
@@ -85,7 +83,7 @@ lassoProcess source = do
   bounds <- lassoProcessLoop source []
   stRender .= return ()
   (inside,outside) <- lassoPartitionStrokes bounds <$> use stNoteData
-  stSelection .= inside
+  stSelection .= (extend 10 $ boundingBox inside, inside)
   stNoteData .= outside
   invalidate $ boundingBox bounds
   return ()
@@ -122,13 +120,13 @@ average xs = ((1/fromIntegral (length xs)) *) .>> foldr (+) zero xs
 -- 
 norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
-peri a b c = dist a b + dist b c + dist c a
+peri xs = sum $ zipWith dist xs (rot xs)
 
-touchProcess :: Translation -> M.Map Int (Coord,Coord) -> GtkP ()
-touchProcess origTrans touches
+touchProcess :: Selection -> Translation -> M.Map Int (Coord,Coord) -> GtkP ()
+touchProcess selection origTrans touches
   | M.null touches = return ()
   | otherwise = do
-  let cont = touchProcess origTrans
+  let cont = touchProcess selection origTrans
   -- liftIO $ do
   --   putStrLn "touches"
   --   forM_ (M.assocs touches) print
@@ -136,26 +134,24 @@ touchProcess origTrans touches
   case eventSource ev of
     MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
-          -> return ()
-             -- cont $ M.delete (eventButton ev) touches
+          -> return () 
       _ | eventType ev `elem` [Begin,Update]
           -> do let touches' = M.alter (add (eventCoord ev)) (eventButton ev) touches
-                liftIO $ print $ M.keys touches'
-                case M.elems touches' of
-                  [(p0,p1),(q0,q1)] -> do
-                    let s0 = dist p0 q0
-                        s1 = dist p1 q1
-                        a0 = avg p0 q0
-                        a1 = avg p1 q1
-                    transSheet origTrans a0 a1 (s1 / (s0+1))
-                    cont touches'
-                  -- [(p0,p1),(q0,q1),(r0,r1)] -> do
-                  --   let s0 = peri p0 q0 r0
-                  --       s1 = peri p1 q1 r1
-                  --       c = average [p0,q0,r0]
-                  --   zoomSheet origTrans c (s1 / (s0+1))
-                  --   cont touches'
-                  _ -> cont touches'
+                    pss = M.elems touches'
+                    (ps0,ps1) = unzip pss
+                    s0 = peri ps0
+                    s1 = peri ps1
+                    factor = (s1 / (s0+1))
+                    a0 = average ps0
+                    a1 = average ps1
+                    inSel = any (`inArea` fst selection) ps0
+                case (M.size touches',inSel) of
+                  (1,True) -> transSel selection a0 a1 1
+                  (2,True) -> transSel selection a0 a1 factor
+                  (2,False) -> transSheet origTrans a0 a1 1
+                  (3,False) -> transSheet origTrans a0 a1 factor
+                  _ -> return ()
+                cont touches'
       _ -> cont touches
     Stylus -> rollback ev origTrans
     Eraser -> rollback ev origTrans
@@ -169,24 +165,40 @@ transSheet origTrans a0 a1 factor = do
       d = a1 - a0
       (cx,cy) = xy c (,)
       (dx,dy) = xy d (,)
-      f = z0*(1-factor)
-  stTranslation .= Translation (z0*factor) (x0 + dx + cx*f) (y0 + dy + cy*f)
+      z1 = max 0.1 (z0*factor)
+      factor' = z1 / z0
+      f = z0*(1-factor')
+  stTranslation .= Translation z1 (x0 + dx + cx*f) (y0 + dy + cy*f)
   invalidateAll
 
-moveSheet origTrans delta = do
-          let (dx,dy) = xy delta (,)
-              Translation z0 x0 y0 = origTrans
-          stTranslation .= Translation z0 (dx+x0) (dy+y0)
-          invalidateAll
+transSel origSel a0 a1 factor = do
+  liftIO $ print (a0,a1,factor)
+  let -- a0 * factor + d = a1
+      (dx,dy) = xy (a1 - factor .* a0) (,)
+  stSelection .= transform (Translation factor dx dy) origSel
+  invalidateAll -- optim. possible
 
-zoomSheet origTrans center factor = do
-  let Translation z0 x0 y0 = origTrans
-      (cx,cy) = xy center (,)
-      f = z0*(1-factor)
-  stTranslation .= Translation (z0*factor) (x0 + cx*f) (y0 + cy*f)
-      -- we want: cx*z0 + x0 = cx*z0*factor + x1
-      -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
-  invalidateAll
+moveSel origSel a0 a1 factor = do
+  liftIO $ print (a0,a1,factor)
+  let -- a0 * factor + d = a1
+      (dx,dy) = xy (a1 - factor .* a0) (,)
+  stSelection .= transform (Translation factor dx dy) origSel
+  invalidateAll -- optim. possible
+
+-- moveSheet origTrans delta = do
+--           let (dx,dy) = xy delta (,)
+--               Translation z0 x0 y0 = origTrans
+--           stTranslation .= Translation z0 (dx+x0) (dy+y0)
+--           invalidateAll
+
+-- zoomSheet origTrans center factor = do
+--   let Translation z0 x0 y0 = origTrans
+--       (cx,cy) = xy center (,)
+--       f = z0*(1-factor)
+--   stTranslation .= Translation (z0*factor) (x0 + cx*f) (y0 + cy*f)
+--       -- we want: cx*z0 + x0 = cx*z0*factor + x1
+--       -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
+--   invalidateAll
 
 simpleTouchProcess :: Translation -> Coord -> GtkP ()
 simpleTouchProcess origTrans origCoord = do
@@ -197,7 +209,7 @@ simpleTouchProcess origTrans origCoord = do
       _ | eventType ev `elem` [Release]
           -> return () -- finish
       _ | eventType ev `elem` [Motion,Press]
-          -> do moveSheet origTrans (eventCoord ev - origCoord)
+          -> do transSheet origTrans origCoord (eventCoord ev) 1
                 cont
       _ -> -- non-multi touch event
         cont
@@ -208,17 +220,22 @@ simpleTouchProcess origTrans origCoord = do
 rollback ev origTrans = do
   Process.pushBack ev
   stTranslation .= origTrans
-  
+
+strokeSel = return ()
+
 mainProcess :: GtkP ()
 mainProcess = do
   ev <- wait "top-level"
   Ctx {..} <- ask
   liftIO $ print ev
+  haveSel <- not . isEmptySetection <$> use stSelection
   let pressure = coordZ $ eventCoord $ ev
       havePressure = pressure > 0.01
   case ev of
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
-      stroke (eventSource ev)
+      if haveSel
+        then strokeSel 
+        else stroke (eventSource ev)
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
       eraseNear (eventCoord)
       eraseProcess (eventSource ev)
@@ -227,7 +244,8 @@ mainProcess = do
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
         tr <- use stTranslation
-        touchProcess tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+        sel <- use stSelection
+        touchProcess sel tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
     Event {eventSource = Touch} -> do
       when (eventType ev `elem` [Press,Motion]) $ do
         tr <- use stTranslation

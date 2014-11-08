@@ -1,13 +1,15 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards #-}
 module GtkProcess where
 
+import qualified Prelude
+import WNPrelude
 import Control.Applicative
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Graphics.Rendering.Cairo
 import Graphics.Rendering.Cairo.Matrix
-import Graphics.UI.Gtk
+import qualified Graphics.UI.Gtk as Gtk
 
 import Process hiding (wait)
 import qualified Process
@@ -16,18 +18,17 @@ import NoteData
 import Render
 
 data Ctx
-  = Ctx { _ctxDrawWindow :: DrawWindow
-        , _ctxCanvas :: DrawingArea
+  = Ctx { _ctxDrawWindow :: Gtk.DrawWindow
+        , _ctxCanvas :: Gtk.DrawingArea
         }
 
 $(makeLenses ''Ctx)
 
-data Translation = Translation {trZoom, trX, drY :: Double}
 
 data St =
   St { _stRender :: Render ()
      , _stNoteData :: NoteData
-     , _stSelection :: [Stroke]
+     , _stSelection :: Selection
      , _stTranslation :: Translation
      }
 
@@ -36,7 +37,7 @@ $(makeLenses ''St)
 initSt :: St
 initSt = St{_stRender = return ()
            ,_stNoteData = emptyNoteData
-           ,_stSelection = []
+           ,_stSelection = emptySelection
            ,_stTranslation = Translation 1 0 0
            }
 

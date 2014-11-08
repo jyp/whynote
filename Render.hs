@@ -81,14 +81,15 @@ boxRectangle (Box lo hi) =
   (hi-lo) `xy` 
   rectangle lx ly
 
-renderSelection :: NoteData -> Render ()
-renderSelection cs = do
+renderSelection :: Selection -> Render ()
+renderSelection (bbox,cs) = do
   save
   setDash [5,5] 0
   setLineWidth 1
-  boxRectangle $ boundingBox cs
+  boxRectangle $ bbox
   strokePreserve
   setSourceRGBA 0 0 1 0.5
   fill
   restore
   forM_ cs drawStrokeSelected
+

@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
@@ -20,15 +20,21 @@ instance AbelianGroup Coord where
   zero = Coord 0 0 0 0
 
 s .>> (Coord x y z t) = Coord (s x) (s y) (s z) t
+s .* v = (s *) .>> v
 
 xy (Coord x y _ _) f  = f x y
 
--- instance Num Coord where
---   negate (Coord x y z t) = Coord (negate x)(negate y)(negate z)(negate t)
---   Coord x0 y0 z0 t0 + Coord x1 y1 z1 t1 = Coord (x0+x1)(y0+y1)(z0+z1)(t0+t1)
+type Selection = (Box, [Stroke])
+emptySelection = (Box zero zero, [])
+isEmptySetection = null . snd
 
+------------------
+-- Boxes
 
-
+extend :: Double -> Box -> Box
+extend d (Box p1 p2) = Box (p1-x)(p2+x)
+  where x = Coord d d 0 0
+        
 class HasBox a where
   boundingBox :: a -> Box
 
@@ -38,10 +44,34 @@ instance HasBox a => HasBox [a] where
 instance HasBox Coord where
   boundingBox c = Box c c
 
+class Area a where
+  inArea :: Coord -> a -> Bool
+
+instance Area Box where
+  inArea (Coord x y _ _) (Box p1 p2) =
+    p1 `xy` \x1 y1 -> p2 `xy` \x2 y2 -> x1 <= x && x <= x2 && y1 <= y && y <= y2
+
+data Translation = Translation {trZoom, trX, drY :: Double}
+
+class TwoD a where
+  transform :: Translation -> a -> a
+
+instance TwoD Coord where
+  transform (Translation zz dx dy) (Coord x y z t) = Coord (x * zz + dx) (y * zz + dy) (z * zz) t
+
+instance TwoD Box where
+  transform tr (Box p1 p2) = Box (transform tr p1) (transform tr p2)
+
+instance (TwoD a, TwoD b) => TwoD (a,b) where
+  transform tr (a,b) = (transform tr a, transform tr b)
+
+instance TwoD a => TwoD [a] where
+  transform tr = map (transform tr)
+
 data Box = Box Coord Coord
 type Curve = [Coord]
 newtype Stroke = Stroke Curve
-  deriving (HasBox)
+  deriving (HasBox, TwoD)
 type NoteData = [Stroke]
 
 emptyNoteData :: NoteData
@@ -77,18 +107,18 @@ diffQuadr x y | z < negate 2 = z + 4
 
 rot (x:xs) = xs ++ [x]
 
-pointInside :: Coord -> Curve -> Bool
-pointInside _ [] = False
-pointInside p strk = odd winding
-  where qs = map (quadrant . (\p' -> p' - p)) strk
-        dqs = zipWith diffQuadr qs (rot qs)
-        winding = sum dqs `div` 4
+instance Area Curve where
+  inArea _ [] = False
+  inArea p strk = odd winding
+    where qs = map (quadrant . (\p' -> p' - p)) strk
+          dqs = zipWith diffQuadr qs (rot qs)
+          winding = sum dqs `div` 4
 
-strokeInside :: Stroke -> Curve -> Bool
-(Stroke s1) `strokeInside` s2 = all (`pointInside` s2) s1
+strokeInArea :: Stroke -> Curve -> Bool
+(Stroke s1) `strokeInArea` s2 = all (`inArea` s2) s1
 
 lassoPartitionStrokes :: Curve -> [Stroke] -> ([Stroke],[Stroke])
-lassoPartitionStrokes strk = partition (`strokeInside` strk)
+lassoPartitionStrokes strk = partition (`strokeInArea` strk)
 
 pointNear d2 p1 p2 = dx*dx + dy*dy < d2
   where Coord dx dy _ _ = p2 - p1
