@@ -52,7 +52,6 @@ strokeLoop source c = do
 
 stroke :: Source -> GtkP ()
 stroke source = do
-  deselect
   strk <- strokeLoop source []
   stNoteData %= (Stroke strk:)
   stRender .= return ()
@@ -88,28 +87,47 @@ lassoProcess source = do
   invalidate $ boundingBox bounds
   return ()
 
+addToSelection strks = do
+  (_,s0) <- use stSelection
+  let s1 = s0 ++ strks
+      bbox1 = extend 10 $ boundingBox s1
+  stSelection .= (bbox1,s1)
+  invalidate bbox1
+    
+selectNear :: Coord -> GtkP ()
+selectNear p = do
+  (selected,kept) <- partitionStrokesNear 100 p <$> use stNoteData
+  addToSelection selected
+  stNoteData .= kept
+
 eraseNear :: Coord -> GtkP ()
 eraseNear p = do
   (erased,kept) <- partitionStrokesNear 100 p <$> use stNoteData
   invalidate $ boxUnion $ map boundingBox erased
   stNoteData .= kept
 
-eraseProcessLoop :: Source -> GtkP ()
-eraseProcessLoop source = do
-  ev <- wait "next erase point"
+neighbourhoodProcessLoop :: Source -> (Coord -> GtkP ()) -> GtkP ()
+neighbourhoodProcessLoop source action = do
+  ev <- wait "next neighbourhood point"
   case eventSource ev == source of
-    False -> eraseProcessLoop source -- ignore events from another source
+    False -> neighbourhoodProcessLoop source action -- ignore events from another source
     True -> case ev of
       Event {eventType  = Event.Release} -> return ()
       Event {eventModifiers = 0} -> return () -- motion without any pressed key
-      _ -> do eraseNear (eventCoord ev)
-              eraseProcessLoop source
+      _ -> do action (eventCoord ev)
+              neighbourhoodProcessLoop source action
 
 eraseProcess :: Source -> GtkP ()
 eraseProcess source = do
   stRender .= return ()
   deselect
-  eraseProcessLoop source
+  neighbourhoodProcessLoop source eraseNear
+  return ()
+
+selectProcess :: Source -> GtkP ()
+selectProcess source = do
+  stRender .= return ()
+  neighbourhoodProcessLoop source selectNear
   return ()
 
 add cord Nothing = Just (cord,cord)
@@ -153,8 +171,8 @@ touchProcess selection origTrans touches
                   _ -> return ()
                 cont touches'
       _ -> cont touches
-    Stylus -> rollback ev origTrans
-    Eraser -> rollback ev origTrans
+    Stylus -> return ()
+    Eraser -> return ()
     _ -> cont touches
 
 
@@ -168,6 +186,8 @@ transSheet origTrans a0 a1 factor = do
       z1 = max 0.1 (z0*factor)
       factor' = z1 / z0
       f = z0*(1-factor')
+      -- we want: cx*z0 + x0 = cx*z0*factor + x1
+      -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
   stTranslation .= Translation z1 (x0 + dx + cx*f) (y0 + dy + cy*f)
   invalidateAll
 
@@ -177,28 +197,6 @@ transSel origSel a0 a1 factor = do
       (dx,dy) = xy (a1 - factor .* a0) (,)
   stSelection .= transform (Translation factor dx dy) origSel
   invalidateAll -- optim. possible
-
-moveSel origSel a0 a1 factor = do
-  liftIO $ print (a0,a1,factor)
-  let -- a0 * factor + d = a1
-      (dx,dy) = xy (a1 - factor .* a0) (,)
-  stSelection .= transform (Translation factor dx dy) origSel
-  invalidateAll -- optim. possible
-
--- moveSheet origTrans delta = do
---           let (dx,dy) = xy delta (,)
---               Translation z0 x0 y0 = origTrans
---           stTranslation .= Translation z0 (dx+x0) (dy+y0)
---           invalidateAll
-
--- zoomSheet origTrans center factor = do
---   let Translation z0 x0 y0 = origTrans
---       (cx,cy) = xy center (,)
---       f = z0*(1-factor)
---   stTranslation .= Translation (z0*factor) (x0 + cx*f) (y0 + cy*f)
---       -- we want: cx*z0 + x0 = cx*z0*factor + x1
---       -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
---   invalidateAll
 
 simpleTouchProcess :: Translation -> Coord -> GtkP ()
 simpleTouchProcess origTrans origCoord = do
@@ -221,7 +219,33 @@ rollback ev origTrans = do
   Process.pushBack ev
   stTranslation .= origTrans
 
-strokeSel = return ()
+moveSelWithPen :: Selection -> Coord -> GtkP ()
+moveSelWithPen origSel origCoord = do
+  ev <- wait "move sel pen"
+  case eventSource ev of
+    Stylus -> case ev of
+      Event {eventType  = Event.Release} -> return ()
+      Event {eventModifiers = 0} -> return () -- motion without any pressed key
+      _ -> do
+        transSel origSel origCoord (eventCoord ev) 1
+        moveSelWithPen origSel origCoord
+    _ -> do moveSelWithPen origSel origCoord -- ignore events from another source
+
+waitForRelease = do
+  ev <- wait "wait pen release"
+  case eventSource ev of
+    Stylus -> case ev of
+      Event {eventType  = Event.Release} -> return ()
+      Event {eventModifiers = 0} -> return () -- motion without any pressed key
+      _ -> waitForRelease
+    _ -> waitForRelease
+  
+strokeSel p = do
+  s@(selBox,_) <- use stSelection
+  if p `inArea` selBox
+     then moveSelWithPen s p
+     else do deselect
+             waitForRelease
 
 mainProcess :: GtkP ()
 mainProcess = do
@@ -234,13 +258,14 @@ mainProcess = do
   case ev of
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
-        then strokeSel 
+        then strokeSel eventCoord
         else stroke (eventSource ev)
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
       eraseNear (eventCoord)
       eraseProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
-      lassoProcess (eventSource ev)
+      -- lassoProcess (eventSource ev)
+      selectProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
         tr <- use stTranslation

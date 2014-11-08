@@ -38,6 +38,9 @@ extend d (Box p1 p2) = Box (p1-x)(p2+x)
 class HasBox a where
   boundingBox :: a -> Box
 
+instance HasBox Box where
+  boundingBox = id
+  
 instance HasBox a => HasBox [a] where
   boundingBox = boxUnion . map boundingBox
 
