@@ -143,21 +143,35 @@ touchProcess origTrans touches
                 liftIO $ print $ M.keys touches'
                 case M.elems touches' of
                   [(p0,p1),(q0,q1)] -> do
-                    let a0 = avg p0 q0
+                    let s0 = dist p0 q0
+                        s1 = dist p1 q1
+                        a0 = avg p0 q0
                         a1 = avg p1 q1
-                    moveSheet origTrans (a1 - a0)
+                    transSheet origTrans a0 a1 (s1 / (s0+1))
                     cont touches'
-                  [(p0,p1),(q0,q1),(r0,r1)] -> do
-                    let s0 = peri p0 q0 r0
-                        s1 = peri p1 q1 r1
-                        c = average [p0,q0,r0]
-                    zoomSheet origTrans c (s1 / s0+1)
-                    cont touches'
+                  -- [(p0,p1),(q0,q1),(r0,r1)] -> do
+                  --   let s0 = peri p0 q0 r0
+                  --       s1 = peri p1 q1 r1
+                  --       c = average [p0,q0,r0]
+                  --   zoomSheet origTrans c (s1 / (s0+1))
+                  --   cont touches'
                   _ -> cont touches'
       _ -> cont touches
     Stylus -> rollback ev origTrans
     Eraser -> rollback ev origTrans
     _ -> cont touches
+
+
+transSheet origTrans a0 a1 factor = do
+  liftIO $ print (a0,a1,factor)
+  let Translation z0 x0 y0 = origTrans
+  let c = avg a0 a1
+      d = a1 - a0
+      (cx,cy) = xy c (,)
+      (dx,dy) = xy d (,)
+      f = z0*(1-factor)
+  stTranslation .= Translation (z0*factor) (x0 + dx + cx*f) (y0 + dy + cy*f)
+  invalidateAll
 
 moveSheet origTrans delta = do
           let (dx,dy) = xy delta (,)
