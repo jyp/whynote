@@ -46,6 +46,11 @@ main = do
        renderWithDrawWindow drawin $ renderAll st msg
        return ()
 
+     on canvas keyPressEvent $ liftIO $ do
+       cont <- readIORef continuation
+       putStrLn $ "Current state: " ++ show cont
+       return False
+       
      lastStylusTime <- newIORef (0 :: TimeStamp)
      
      let handleEvent :: EventM t Bool

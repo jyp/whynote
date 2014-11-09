@@ -67,8 +67,8 @@ wait msg = do
   waitInTrans tr msg
 
 renderAll St{..} msg = do
-   moveTo 0 10
-   showText $ msg
+   -- moveTo 0 10
+   -- showText $ msg
    setMatrix $ makeTranslationMatrix _stTranslation
    _stRender
    renderNoteData _stNoteData
