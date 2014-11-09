@@ -1,19 +1,19 @@
 {-# LANGUAGE RecordWildCards #-}
 module App where
 
-import qualified Prelude
-import WNPrelude
-import NoteData
-import Event
-import GtkProcess
-import Render
-import qualified Graphics.UI.Gtk as Gtk
-import qualified Graphics.Rendering.Cairo as Cairo
+import Control.Lens hiding (transform)
 import Control.Monad
 import Control.Monad.IO.Class
 import Control.Monad.Reader
-import Control.Lens hiding (transform)
+import Event
+import GtkProcess
+import NoteData
+import Render
+import WNPrelude
 import qualified Data.Map.Strict as M
+import qualified Graphics.Rendering.Cairo as Cairo
+import qualified Graphics.UI.Gtk as Gtk
+import qualified Prelude
 import qualified Process
 
 invalidateAll :: GtkP ()
@@ -34,13 +34,9 @@ invalidate b0 = do
   liftIO $ do
     Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
 
-render :: Cairo.Render () -> GtkP ()
-render x = do
-  stRender .= x
-
 strokeLoop :: Source -> [Coord] -> GtkP [Coord]
 strokeLoop source c = do
-  render $ drawStroke $ Stroke c
+  stRender .= (drawStroke $ Stroke c)
   invalidate $ boundingBox c
   ev <- wait "next stroke point"
   case eventSource ev == source of
@@ -59,7 +55,7 @@ stroke source = do
 
 lassoProcessLoop :: Source -> [Coord] -> GtkP [Coord]
 lassoProcessLoop source c = do
-  render $ drawLasso c
+  stRender .= drawLasso c
   invalidate $ boundingBox c
   ev <- wait "next lasso point"
   case eventSource ev == source of
@@ -75,7 +71,7 @@ deselect = do
   stNoteData %= (oldSel++)
   stSelection .= emptySelection
   invalidate $ bbox
-  
+
 lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
   deselect
