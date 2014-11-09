@@ -26,13 +26,10 @@ executable whynote
 
   main-is: Test.hs
   other-modules: Device
-  -- other-modules: Dev
   cc-options:      -Wno-pointer-to-int-cast -std=gnu99 -DDEBUG  -fPIC
-  extra-libraries: X11 Xi
-  install-includes: 
+  install-includes:
                    c/c_initdevice.h
                    c/template-hsc-gtk2hs.h
-                   -- c/XInput.h
   c-sources: c/c_initdevice.c
   include-dirs:    c
 

@@ -50,9 +50,8 @@ main = do
        cont <- readIORef continuation
        putStrLn $ "Current state: " ++ show cont
        return False
-       
+
      lastStylusTime <- newIORef (0 :: TimeStamp)
-     
      let handleEvent :: EventM t Bool
          handleEvent = do
            ev <- ask
@@ -74,7 +73,5 @@ main = do
      on canvas touchEvent handleEvent
      on canvas motionNotifyEvent handleEvent
      on canvas buttonPressEvent handleEvent
-
-     -- on window deleteEvent $ return False
-     on window destroyEvent (do liftIO mainQuit; return True)
+     on window objectDestroy mainQuit
      mainGUI
