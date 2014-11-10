@@ -11,7 +11,6 @@ import NoteData
 import Render
 import WNPrelude
 import qualified Data.Map.Strict as M
-import qualified Graphics.Rendering.Cairo as Cairo
 import qualified Graphics.UI.Gtk as Gtk
 import qualified Prelude
 import qualified Process
@@ -176,22 +175,22 @@ touchProcess selection origTrans touches
     _ -> cont touches
 
 
-transSheet origTrans a0 a1 factor = do
   -- liftIO $ xprint (a0,a1,factor)
-  let Translation z0 x0 y0 = origTrans
-  let c = avg a0 a1
-      d = a1 - a0
-      (cx,cy) = xy c (,)
-      (dx,dy) = xy d (,)
-      z1 = max 0.1 (z0*factor)
-      factor' = z1 / z0
-      f = z0*(1-factor')
-      -- we want: cx*z0 + x0 = cx*z0*factor + x1
-      -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
-  stTranslation .= Translation z1 (x0 + dx + cx*f) (y0 + dy + cy*f)
-  invalidateAll
+  -- let Translation z0 x0 y0 = origTrans
+  -- let c = avg a0 a1
+  --     d = a1 - a0
+  --     (cx,cy) = xy c (,)
+  --     (dx,dy) = xy d (,)
+  --     z1 = max 0.1 (z0*factor)
+  --     factor' = z1 / z0
+  --     f = z0*(1-factor')
+  --     -- we want: cx*z0 + x0 = cx*z0*factor + x1
+  --     -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
+  -- stTranslation .= Translation z1 (x0 + dx + cx*f) (y0 + dy + cy*f)
+  -- invalidateAll
 
-{-
+
+transSheet origTrans a0 a1 factor = do
   let Translation z0 dx0 dy0 = origTrans
   let d = a1 - a0
       (dx,dy) = xy d (,)
@@ -201,7 +200,7 @@ transSheet origTrans a0 a1 factor = do
   stTranslation .= Translation z1 (dx0 + z0 * a1x - z1 * a0x) (dy0 + z0 * a1y - z1 * a0y)
   invalidateAll
 
--}
+
 
 transSel origSel a0 a1 factor = do
   -- liftIO $ print (a0,a1,factor)
