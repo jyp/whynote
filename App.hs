@@ -16,6 +16,7 @@ import qualified Graphics.UI.Gtk as Gtk
 import qualified Prelude
 import qualified Process
 import Data.Bits
+import qualified Data.Vector as V
 
 invalidateAll :: GtkP ()
 invalidateAll = do
@@ -37,7 +38,7 @@ invalidate b0 = do
 
 strokeLoop :: Source -> [Coord] -> GtkP Stroke
 strokeLoop source c = do
-  let res = Stroke (box $ Curve c)
+  let res = Stroke (box $ Curve $ V.fromList c)
   stRender .= drawStroke res 
   invalidate $ boundingBox c
   ev <- wait "next stroke point"
@@ -57,7 +58,7 @@ stroke source = do
 
 lassoProcessLoop :: Source -> [Coord] -> GtkP ClosedCurve
 lassoProcessLoop source c = do
-  let res = Closed c
+  let res = Closed $ V.fromList c
   stRender .= drawLasso res
   invalidate $ boundingBox c
   ev <- wait "next lasso point"
@@ -176,7 +177,7 @@ touchProcess selection origTrans touches
 
 
 transSheet origTrans a0 a1 factor = do
-  liftIO $ print (a0,a1,factor)
+  -- liftIO $ xprint (a0,a1,factor)
   let Translation z0 x0 y0 = origTrans
   let c = avg a0 a1
       d = a1 - a0
@@ -203,7 +204,7 @@ transSheet origTrans a0 a1 factor = do
 -}
 
 transSel origSel a0 a1 factor = do
-  liftIO $ print (a0,a1,factor)
+  -- liftIO $ print (a0,a1,factor)
   let -- a0 * factor + d = a1
       (dx,dy) = xy (a1 - factor .* a0) (,)
   stSelection .= transform (Translation factor dx dy) origSel

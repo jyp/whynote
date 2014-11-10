@@ -2,13 +2,15 @@ module WNPrelude
        (module Control.Applicative,
         module Prelude.YAP,
         module Data.YAP.Algebra,
+        module Data.Foldable
         )
        where
 
-import Prelude.YAP
+import Prelude.YAP hiding (foldr)
 import Control.Applicative
 import Data.YAP.Algebra
 import Data.Word
+import Data.Foldable (foldr)
 
 import qualified Prelude as P
 

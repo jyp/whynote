@@ -4,8 +4,11 @@ import qualified Prelude as P
 import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
 import Event
-import Control.Monad 
+-- import Control.Monad 
 import NoteData
+import qualified Data.Vector as V
+import Data.Traversable
+import Data.Foldable
 
 drawEv :: Event -> Render ()
 drawEv ev@Event{eventCoord = Coord x y z t} = do
@@ -16,24 +19,27 @@ drawEv ev@Event{eventCoord = Coord x y z t} = do
     stroke
 
 drawLasso :: ClosedCurve -> Cairo.Render ()
-drawLasso (Closed []) = return ()
-drawLasso (Closed (p0:ps)) = do
-  Cairo.setSourceRGBA 0 0 0 0.2
-  Cairo.setFillRule Cairo.FillRuleEvenOdd
-  setLineWidth 5
-  xy p0 moveTo
-  forM_ ps $ \p -> xy p lineTo
-  Cairo.fill
+drawLasso (Closed c)
+  | V.null c = return ()
+  | otherwise = do
+    let p0 = V.head c
+        ps = V.tail c
+    Cairo.setSourceRGBA 0 0 0 0.2
+    Cairo.setFillRule Cairo.FillRuleEvenOdd
+    setLineWidth 5
+    xy p0 moveTo
+    forM_ ps $ \p -> xy p lineTo
+    Cairo.fill
 
 drawStroke :: Stroke -> Cairo.Render ()
-drawStroke (Stroke (Boxed _ (Curve c))) = do
+drawStroke (Stroke (Boxed _ c)) = do
   Cairo.setSourceRGBA 0 0 0 1
   Cairo.setFillRule Cairo.FillRuleWinding
   strokePath c
   Cairo.fill
 
 drawStrokeSelected :: Stroke -> Cairo.Render ()
-drawStrokeSelected (Stroke (Boxed _ (Curve c))) = do
+drawStrokeSelected (Stroke (Boxed _ c)) = do
   strokePath c
   setLineWidth 3
   -- Cairo.setSourceRGBA 0.5 0.5 0.5 1
@@ -42,14 +48,18 @@ drawStrokeSelected (Stroke (Boxed _ (Curve c))) = do
   Cairo.setFillRule Cairo.FillRuleWinding
   Cairo.fill  
 
-strokePath :: [Coord] -> Cairo.Render ()
-strokePath [] = return ()
-strokePath [_] = return ()
-strokePath (phead@(Coord xo yo _z0 _t0) : xs) = do
+strokePath :: Curve -> Cairo.Render ()
+strokePath (Curve c)
+  | V.length c <= 1 = return ()
+  | otherwise = do
+    let phead@(Coord xo yo _z0 _t0) = V.head c
+        xs = V.tail c
     Cairo.moveTo xo yo
-    let (plast:rxs) = reverse xs
-    foldM_ forward phead xs
-    foldM_ forward plast rxs
+    let plast = V.head rxs0
+        rxs = V.tail rxs0
+        rxs0 = V.reverse xs
+    V.foldM_ forward phead xs
+    V.foldM_ forward plast rxs
   where turn (x,y) = (negate y,x)
         norm (x,y) = sqrt (x*x + y*y)
         (x1,y1) .-. (x0,y0) = (x1-x0 , y1-y0)

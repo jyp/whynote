@@ -25,6 +25,7 @@ executable whynote
   build-depends: yap >= 0.1
   build-depends: time >= 1.5
   build-depends: bytestring >= 0.10
+  build-depends: vector >= 0.10
 
   main-is: Test.hs
   other-modules: Device

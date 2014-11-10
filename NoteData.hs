@@ -4,9 +4,12 @@ import Prelude ()
 import WNPrelude
 import Control.Applicative
 import Data.Aeson
+import Data.Monoid
 
 import Data.List
 import Data.Word
+import qualified Data.Vector as V
+
 data Coord = Coord { coordX :: Double
                    , coordY :: Double
                    , coordZ :: Double
@@ -55,6 +58,9 @@ instance HasBox Box where
 instance HasBox a => HasBox [a] where
   boundingBox = boxUnion . map boundingBox
 
+instance HasBox a => HasBox (V.Vector a) where
+  boundingBox = boundingBox . V.toList
+
 instance HasBox Coord where
   boundingBox c = Box c c
 
@@ -98,13 +104,16 @@ instance TwoD Selection where
 instance TwoD a => TwoD [a] where
   transform tr = map (transform tr)
 
+instance TwoD a => TwoD (V.Vector a) where
+  transform tr = fmap (transform tr)
+
 instance TwoD a => TwoD (Boxed a) where
   transform tr (Boxed b a) = Boxed (transform tr b) (transform tr a)
 
 data Box = Box Coord Coord
-newtype Curve = Curve [Coord]
+newtype Curve = Curve (V.Vector Coord)
   deriving (HasBox, TwoD)
-newtype ClosedCurve = Closed [Coord]
+newtype ClosedCurve = Closed (V.Vector Coord)
   deriving (HasBox, TwoD)
 newtype Stroke = Stroke (Boxed Curve)
   deriving (HasBox, TwoD, Area)
@@ -146,19 +155,23 @@ diffQuadr x y | z < negate 2 = z + 4
 rot :: [a] -> [a]
 rot (x:xs) = xs ++ [x]
 
+vrot xs = V.tail xs <>  V.singleton (V.head xs)
+
 instance Area ClosedCurve where
-  inArea _ (Closed []) = False
-  inArea p (Closed strk) = odd winding
-    where qs = map (quadrant . (\p' -> p' - p)) strk
-          dqs = zipWith diffQuadr qs (rot qs)
-          winding = sum dqs `div` 4
+  inArea p (Closed v) =
+    if V.null v
+       then False
+       else odd winding
+    where qs = fmap (quadrant . (\p' -> p' - p)) v
+          dqs = V.zipWith diffQuadr qs (vrot qs)
+          winding = V.sum dqs `div` 4
 
 strokeInArea :: Area a => Stroke -> a -> Bool
-(Stroke (Boxed _ (Curve s1))) `strokeInArea` s2 = all (`inArea` s2) s1
+(Stroke (Boxed _ (Curve s1))) `strokeInArea` s2 = V.all (`inArea` s2) s1
 
 instance Area Curve where
   inArea _ _ = False
-  nearArea d p (Curve ps) = any (nearArea d p) ps
+  nearArea d p (Curve ps) = V.any (nearArea d p) ps
 
 lassoPartitionStrokes :: Boxed ClosedCurve -> [Stroke] -> ([Stroke],[Stroke])
 lassoPartitionStrokes strk = partition (`strokeInArea` strk)
