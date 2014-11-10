@@ -15,6 +15,7 @@ import qualified Graphics.Rendering.Cairo as Cairo
 import qualified Graphics.UI.Gtk as Gtk
 import qualified Prelude
 import qualified Process
+import Data.Bits
 
 invalidateAll :: GtkP ()
 invalidateAll = do
@@ -243,6 +244,10 @@ strokeSel p = do
      else do deselect
              waitForRelease
 
+-- 1: shift
+-- 256 mouse 1
+-- 512 mouse 2 (mid)
+-- 1024 mouse 3 (right)
 mainProcess :: GtkP ()
 mainProcess = do
   ev <- wait "top-level"
@@ -267,10 +272,10 @@ mainProcess = do
         tr <- use stTranslation
         sel <- use stSelection
         touchProcess sel tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
-    Event {eventSource = Touch} -> do
-      when (eventType ev `elem` [Press,Motion]) $ do
+    Event {eventSource = Touch,..} | eventModifiers .&. 256 /= 0 -> do
+      when (eventType `elem` [Press,Motion]) $ do
         tr <- use stTranslation
-        simpleTouchProcess tr (eventCoord ev)
+        simpleTouchProcess tr eventCoord
     _ -> return ()
   mainProcess
 
