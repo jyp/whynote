@@ -188,6 +188,18 @@ transSheet origTrans a0 a1 factor = do
   stTranslation .= Translation z1 (x0 + dx + cx*f) (y0 + dy + cy*f)
   invalidateAll
 
+{-
+  let Translation z0 dx0 dy0 = origTrans
+  let d = a1 - a0
+      (dx,dy) = xy d (,)
+      z1 = max 0.1 (z0*factor)
+      (a0x,a0y) = xy a0 (,)
+      (a1x,a1y) = xy a1 (,)
+  stTranslation .= Translation z1 (dx0 + z0 * a1x - z1 * a0x) (dy0 + z0 * a1y - z1 * a0y)
+  invalidateAll
+
+-}
+
 transSel origSel a0 a1 factor = do
   liftIO $ print (a0,a1,factor)
   let -- a0 * factor + d = a1
