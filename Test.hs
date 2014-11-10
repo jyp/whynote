@@ -15,6 +15,7 @@ import Event
 import Data.Time.LocalTime
 import Data.Time.Format
 import System.Mem
+import Control.Concurrent (forkIO)
 
 touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
 touchEvent = Signal (eventM "touch_event" [TouchMask])
@@ -65,7 +66,8 @@ main = do
 
      let save = do
            state <- readIORef continuation
-           writeState fname state
+           forkIO $  writeState fname state
+           return ()
 
      nextSaveTime <- newIORef (0 :: TimeStamp)
      lastStylusTime <- newIORef (0 :: TimeStamp)
