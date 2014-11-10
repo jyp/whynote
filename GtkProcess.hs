@@ -60,8 +60,16 @@ screenCoords (Coord x y _ _) = do
 
 translateEvent :: Translation -> Event -> Event
 translateEvent (Translation z dx dy) Event {eventCoord = Coord{..},..} = Event{..}
-  where eventCoord = Coord{coordX = (coordX - dx)/z, coordY =  (coordY - dy)/z,..}
+  where eventCoord = Coord{coordX = f*(coordX - dx), coordY =  f*(coordY - dy),..}
+        f = 1/z
 
+-- rectToBox :: Translation -> Gtk.Rectangle -> Box
+-- rectToBox (Translation z dx dy) (Gtk.Rectangle x y w h) = Box (Coord (tx x) (ty y) 1 0) (Coord (tx (x+w)) (ty (y+h)) 1 0)
+--   where tx a = dx + f*fromIntegral a
+--         ty a = dy + f*fromIntegral a
+--         f = 1/z
+  
+  
 waitInTrans tr msg = translateEvent tr <$> Process.wait msg
 
 wait msg = do

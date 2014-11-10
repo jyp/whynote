@@ -35,40 +35,42 @@ invalidate b0 = do
   liftIO $ do
     Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
 
-strokeLoop :: Source -> [Coord] -> GtkP [Coord]
+strokeLoop :: Source -> [Coord] -> GtkP Stroke
 strokeLoop source c = do
-  stRender .= (drawStroke $ Stroke c)
+  let res = Stroke (box $ Curve c)
+  stRender .= drawStroke res 
   invalidate $ boundingBox c
   ev <- wait "next stroke point"
   case eventSource ev == source of
     False -> strokeLoop source c -- ignore events from another source
     True -> case ev of
-      Event {eventType  = Event.Release} -> return c
-      Event {eventModifiers = 0} -> return c -- motion without any pressed key
+      Event {eventType  = Event.Release} -> return res
+      Event {eventModifiers = 0} -> return res -- motion without any pressed key
       _ -> strokeLoop source (eventCoord ev:c)
 
 stroke :: Source -> GtkP ()
 stroke source = do
   strk <- strokeLoop source []
-  stNoteData %= (Stroke strk:)
+  stNoteData %= (strk:)
   stRender .= return ()
   return ()
 
-lassoProcessLoop :: Source -> [Coord] -> GtkP [Coord]
+lassoProcessLoop :: Source -> [Coord] -> GtkP ClosedCurve
 lassoProcessLoop source c = do
-  stRender .= drawLasso c
+  let res = Closed c
+  stRender .= drawLasso res
   invalidate $ boundingBox c
   ev <- wait "next lasso point"
   case eventSource ev == source of
     False -> lassoProcessLoop source c -- ignore events from another source
     True -> case ev of
-      Event {eventType  = Event.Release} -> return $ c
-      Event {eventModifiers = 0} -> return $ c -- motion without any pressed key
+      Event {eventType  = Event.Release} -> return res
+      Event {eventModifiers = 0} -> return res -- motion without any pressed key
       _ -> lassoProcessLoop source (eventCoord ev:c)
 
 deselect :: GtkP ()
 deselect = do
-  (bbox,oldSel) <- use stSelection
+  (Selection bbox oldSel) <- use stSelection
   stNoteData %= (oldSel++)
   stSelection .= emptySelection
   invalidate $ bbox
@@ -78,28 +80,28 @@ lassoProcess source = do
   deselect
   bounds <- lassoProcessLoop source []
   stRender .= return ()
-  (inside,outside) <- lassoPartitionStrokes bounds <$> use stNoteData
-  stSelection .= (extend 10 $ boundingBox inside, inside)
+  (inside,outside) <- lassoPartitionStrokes (box bounds) <$> use stNoteData
+  stSelection .= Selection (extend 10 $ boundingBox inside) inside
   stNoteData .= outside
   invalidate $ boundingBox bounds
   return ()
 
 addToSelection strks = do
-  (_,s0) <- use stSelection
+  Selection _ s0 <- use stSelection
   let s1 = s0 ++ strks
       bbox1 = extend 10 $ boundingBox s1
-  stSelection .= (bbox1,s1)
+  stSelection .= Selection bbox1 s1
   invalidate bbox1
     
 selectNear :: Coord -> GtkP ()
 selectNear p = do
-  (selected,kept) <- partitionStrokesNear 100 p <$> use stNoteData
+  (selected,kept) <- partitionStrokesNear 10 p <$> use stNoteData
   addToSelection selected
   stNoteData .= kept
 
 eraseNear :: Coord -> GtkP ()
 eraseNear p = do
-  (erased,kept) <- partitionStrokesNear 100 p <$> use stNoteData
+  (erased,kept) <- partitionStrokesNear 10 p <$> use stNoteData
   invalidate $ boxUnion $ map boundingBox erased
   stNoteData .= kept
 
@@ -159,7 +161,7 @@ touchProcess selection origTrans touches
                     factor = (s1 / (s0+1))
                     a0 = average ps0
                     a1 = average ps1
-                    inSel = any (`inArea` fst selection) ps0
+                    inSel = any (`inArea` selection) ps0
                 case (M.size touches',inSel) of
                   (1,True) -> transSel selection a0 a1 1
                   (2,True) -> transSel selection a0 a1 factor
@@ -250,8 +252,8 @@ waitForRelease = do
     _ -> waitForRelease
   
 strokeSel p = do
-  s@(selBox,_) <- use stSelection
-  if p `inArea` selBox
+  s <- use stSelection
+  if p `inArea` s
      then moveSelWithPen s p
      else do deselect
              waitForRelease
@@ -263,8 +265,7 @@ strokeSel p = do
 mainProcess :: GtkP ()
 mainProcess = do
   ev <- wait "top-level"
-  Ctx {..} <- ask
-  liftIO $ print ev
+  -- liftIO $ print ev
   haveSel <- not . isEmptySetection <$> use stSelection
   let pressure = coordZ $ eventCoord $ ev
       havePressure = pressure > 0.01

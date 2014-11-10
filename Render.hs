@@ -15,9 +15,9 @@ drawEv ev@Event{eventCoord = Coord x y z t} = do
     arc x y (2 * z) 0 3
     stroke
 
-drawLasso :: [Coord] -> Cairo.Render ()
-drawLasso [] = return ()
-drawLasso (p0:ps) = do
+drawLasso :: ClosedCurve -> Cairo.Render ()
+drawLasso (Closed []) = return ()
+drawLasso (Closed (p0:ps)) = do
   Cairo.setSourceRGBA 0 0 0 0.2
   Cairo.setFillRule Cairo.FillRuleEvenOdd
   setLineWidth 5
@@ -26,14 +26,14 @@ drawLasso (p0:ps) = do
   Cairo.fill
 
 drawStroke :: Stroke -> Cairo.Render ()
-drawStroke (Stroke c) = do
+drawStroke (Stroke (Boxed _ (Curve c))) = do
   Cairo.setSourceRGBA 0 0 0 1
   Cairo.setFillRule Cairo.FillRuleWinding
   strokePath c
   Cairo.fill
 
 drawStrokeSelected :: Stroke -> Cairo.Render ()
-drawStrokeSelected (Stroke c) = do
+drawStrokeSelected (Stroke (Boxed _ (Curve c))) = do
   strokePath c
   setLineWidth 3
   -- Cairo.setSourceRGBA 0.5 0.5 0.5 1
@@ -73,6 +73,7 @@ strokePath (phead@(Coord xo yo _z0 _t0) : xs) = do
 
 renderNoteData :: NoteData -> Render ()
 renderNoteData cs = do
+  -- TODO: filter (overlap box . boundingBox)
   forM_ cs drawStroke
 
 boxRectangle :: Box -> Render ()
@@ -82,7 +83,7 @@ boxRectangle (Box lo hi) =
   rectangle lx ly
 
 renderSelection :: Selection -> Render ()
-renderSelection (bbox,cs) = do
+renderSelection (Selection bbox cs) = do
   save
   setDash [5,5] 0
   setLineWidth 1
