@@ -12,13 +12,24 @@ import App
 import Data.IORef
 import Data.Word
 import Event
+import Data.Time.LocalTime
+import Data.Time.Format
 
 touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
 touchEvent = Signal (eventM "touch_event" [TouchMask])
 
 main :: IO ()
 main = do
-     initGUI
+     args <- initGUI
+     (initData,fname) <- case args of
+       [] -> do
+         time <- getZonedTime
+         return $ (emptyNoteData,(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".wnote")
+       [fname] -> do
+         dat <- loadState fname
+         return (dat,fname)
+       _ -> error "Give 0 or 1 argument"
+       
      cfg <- loadConfig
      window <- windowNew
      set window [windowTitle := "WhyNote",
@@ -36,7 +47,7 @@ main = do
      Just drawin <- widgetGetWindow canvas
      setEventCompression drawin False
      let ctx = Ctx drawin canvas
-     setup <- exec $ runGtkP ctx mainProcess
+     setup <- exec $ runGtkP ctx (initSt initData) mainProcess
      continuation <- newIORef setup
 
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
@@ -51,6 +62,11 @@ main = do
        putStrLn $ "Current state: " ++ show cont
        return False
 
+     let save = do
+           state <- readIORef continuation
+           writeState fname state
+
+     nextSaveTime <- newIORef (0 :: TimeStamp)
      lastStylusTime <- newIORef (0 :: TimeStamp)
      let handleEvent :: EventM t Bool
          handleEvent = do
@@ -58,13 +74,18 @@ main = do
            liftIO $ do
              ev' <- getPointer devices ev
              let t = coordT . eventCoord $ ev'
+             -- Touch rejection when stylus/eraser is active
              when (eventSource ev' `elem` [Stylus,Eraser]) $ do
                writeIORef lastStylusTime t
              time0 <- readIORef lastStylusTime
              unless (eventSource ev' `elem` [Touch,MultiTouch]
                      && t - time0 < 150) $ do
-               -- print ev'
                oldState <- readIORef continuation
+               nextSave <- readIORef nextSaveTime
+               -- Save the file every second
+               when (t > nextSave) $ do
+                  save
+                  writeIORef nextSaveTime (t + 1000)
                newState <- resume oldState ev'
                -- print newState
                writeIORef continuation newState
@@ -73,5 +94,7 @@ main = do
      on canvas touchEvent handleEvent
      on canvas motionNotifyEvent handleEvent
      on canvas buttonPressEvent handleEvent
-     on window objectDestroy mainQuit
+     on window objectDestroy $ do
+       save
+       mainQuit
      mainGUI

@@ -16,6 +16,7 @@ import qualified Process
 import Event
 import NoteData
 import Render
+import File
 
 data Ctx
   = Ctx { _ctxDrawWindow :: Gtk.DrawWindow
@@ -34,18 +35,19 @@ data St =
 
 $(makeLenses ''St)
 
-initSt :: St
-initSt = St{_stRender = return ()
-           ,_stNoteData = emptyNoteData
-           ,_stSelection = emptySelection
-           ,_stTranslation = Translation 1 0 0
-           }
+initSt :: NoteData -> St
+initSt dat =
+  St{_stRender = return ()
+    ,_stNoteData = dat
+    ,_stSelection = emptySelection
+    ,_stTranslation = Translation 1 0 0
+    }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
   deriving (Monad, MonadIO, MonadReader Ctx, MonadProcess Event, Functor, Applicative, MonadState St)
 
-runGtkP :: Ctx -> GtkP a -> Process St Event
-runGtkP ctx (GtkP p) = run initSt (runReaderT p ctx)
+runGtkP :: Ctx -> St -> GtkP a -> Process St Event
+runGtkP ctx st (GtkP p) = run st (runReaderT p ctx)
 
 makeTranslationMatrix :: Translation -> Matrix
 makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
@@ -73,3 +75,12 @@ renderAll St{..} msg = do
    _stRender
    renderNoteData _stNoteData
    renderSelection _stSelection
+
+writeState :: String -> Process St Event -> IO ()
+writeState fname (Wait St {..} msg _cont) = writeNote fname (NoteFile _stNoteData)
+writeState _ s = putStrLn $ "Warning: cannot save from state: " ++ show s
+
+loadState :: String -> IO NoteData
+loadState fname = do
+  NoteFile s <- readNote fname
+  return s

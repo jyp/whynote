@@ -5,7 +5,7 @@ import NoteData
 import Data.Aeson
 import Control.Applicative
 
-data NoteFile = NoteFile [Coord]
+data NoteFile = NoteFile NoteData
 
 instance FromJSON NoteFile where
     parseJSON (Object a) = NoteFile <$> a.: "strokes"
