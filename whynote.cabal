@@ -20,12 +20,13 @@ executable whynote
   build-depends: configurator
   build-depends: transformers
   build-depends: lens
-  build-depends: aeson
+  build-depends: aeson >= 0.7
   build-depends: containers >= 0.5
   build-depends: yap >= 0.1
-  build-depends: time >= 1.5
+  build-depends: time >= 1.4
   build-depends: bytestring >= 0.10
   build-depends: vector >= 0.10
+  build-depends: old-locale
 
   main-is: Test.hs
   other-modules: Device
