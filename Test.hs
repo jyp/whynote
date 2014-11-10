@@ -66,7 +66,7 @@ main = do
 
      let save = do
            state <- readIORef continuation
-           forkIO $  writeState fname state
+           
            return ()
 
      nextSaveTime <- newIORef (0 :: TimeStamp)
@@ -87,8 +87,8 @@ main = do
                nextSave <- readIORef nextSaveTime
                -- Save the file every second
                when (t > nextSave) $ do
-                  save
-                  writeIORef nextSaveTime (t + 1000)
+                  forkIO $ writeState fname oldState
+                  writeIORef nextSaveTime (t + 5000)
                newState <- resume oldState ev'
                -- print newState
                writeIORef continuation newState
@@ -99,6 +99,7 @@ main = do
      on canvas motionNotifyEvent handleEvent
      on canvas buttonPressEvent handleEvent
      on window objectDestroy $ do
-       save
+       oldState <- readIORef continuation
+       writeState fname oldState
        mainQuit
      mainGUI
