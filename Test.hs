@@ -14,6 +14,7 @@ import Data.Word
 import Event
 import Data.Time.LocalTime
 import Data.Time.Format
+import System.Mem
 
 touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
 touchEvent = Signal (eventM "touch_event" [TouchMask])
@@ -89,6 +90,7 @@ main = do
                newState <- resume oldState ev'
                -- print newState
                writeIORef continuation newState
+               -- System.Mem.performGC
            return True
 
      on canvas touchEvent handleEvent

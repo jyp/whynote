@@ -29,6 +29,7 @@ executable whynote
   main-is: Test.hs
   other-modules: Device
   cc-options:      -Wno-pointer-to-int-cast -std=gnu99 -DDEBUG  -fPIC
+  ghc-options: -rtsopts -threaded
   install-includes:
                    c/c_initdevice.h
                    c/template-hsc-gtk2hs.h
