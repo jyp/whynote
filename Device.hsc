@@ -79,7 +79,6 @@ foreign import ccall "c_initdevice.h initdevice" c_initdevice
 foreign import ccall "gdk_event_get_source_device" gdk_event_get_source_device
   :: Ptr t -> Device
 
-#if 1
 foreign import ccall "gdk_window_set_event_compression" gdk_window_set_event_compression
   :: Ptr (DrawWindow) -> Bool -> IO ()
 
@@ -87,12 +86,6 @@ setEventCompression :: DrawWindow -> Bool -> IO ()
 setEventCompression dw x =
   withForeignPtr (unsafeCoerce dw :: ForeignPtr DrawWindow) $ \w ->
     gdk_window_set_event_compression w x
-#else
-
-setEventCompression :: DrawWindow -> Bool -> IO ()
-setEventCompression dw x = return ()
-
-#endif
 
 -- | 
 initDevice :: Widget -> Config.WNConfig -> IO DeviceList  
@@ -114,12 +107,6 @@ initDevice widget (Config.WNConfig{..}) =
           touch_val <- peek ptouch
           mtouch_val <- peek pmtouch
           return $ DeviceList stylus_val eraser_val touch_val mtouch_val
-
-class HasCoords t
-
-instance HasCoords EButton
-instance HasCoords EMotion
-
 
 -- |
 getPointer :: DeviceList -> Ptr t -> IO Event
