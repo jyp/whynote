@@ -1,4 +1,4 @@
-{-# LANGUAGE GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards #-}
+{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards, GADTs #-}
 module GtkProcess where
 
 import qualified Prelude
@@ -26,7 +26,7 @@ data Ctx
 $(makeLenses ''Ctx)
 
 
-data St =
+data St = 
   St { _stRender :: Render ()
      , _stNoteData :: NoteData
      , _stSelection :: Selection

@@ -258,6 +258,28 @@ strokeSel p = do
      else do deselect
              waitForRelease
 
+render r = do
+  dw <- view ctxDrawWindow
+  liftIO $ Gtk.renderWithDrawWindow dw r
+
+menu p c = do
+  let exit = do stRender .= return (); invalidateAll; return ()
+  if fst p > 100
+     then exit
+     else do
+       let rMenu = renderMenu p c ["Pen Color","Quit"]
+       stRender .= (rMenu >> return ())
+       active <- render rMenu
+       liftIO $ print active
+       invalidateAll -- optimize
+       Event {..} <- wait "menu"
+       p' <- screenCoords eventCoord
+       case eventType of
+         Press -> case active of
+           Just _ -> liftIO $ Gtk.mainQuit
+           Nothing -> exit
+         _ -> menu p' c
+
 -- 1: shift
 -- 256 mouse 1
 -- 512 mouse 2 (mid)
@@ -265,11 +287,15 @@ strokeSel p = do
 mainProcess :: GtkP ()
 mainProcess = do
   ev <- wait "top-level"
-  -- liftIO $ print ev
+  when (eventType ev == Press) $
+    liftIO $ print ev
   haveSel <- not . isEmptySetection <$> use stSelection
   let pressure = coordZ $ eventCoord $ ev
       havePressure = pressure > 0.01
+  c@(cx,_) <- screenCoords (eventCoord ev)
   case ev of
+    Event {eventSource = Stylus,..} | cx < 30 -> do
+       menu c c
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
         then strokeSel eventCoord

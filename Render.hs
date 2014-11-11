@@ -9,6 +9,7 @@ import NoteData
 import qualified Data.Vector as V
 import Data.Traversable
 import Data.Foldable
+import Data.List (findIndex)
 
 drawEv :: Event -> Render ()
 drawEv ev@Event{eventCoord = Coord x y z t} = do
@@ -94,8 +95,11 @@ boxRectangle (Box lo hi) =
 
 type Point = (Double,Double)
 
-renderDial :: Point -> Double -> Double -> Double -> Int -> [(Bool,String)] -> Render ()
-renderDial (cx,cy) dx inner outer n txts = do
+ptDouble (x,y) = (fromIntegral x, fromIntegral y)
+renderMenu p c txts = renderDial (ptDouble p) (ptDouble c) 5 50 100 12 txts
+
+renderDial :: Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
+renderDial (x,y) (cx,cy) dx inner outer n txts = do
   let angles :: [Double]
       angles = map (+shift) [0,-2*pi/(fromIntegral n).. -2*pi]
       shift = pi*fromIntegral (length txts)/(fromIntegral n)
@@ -104,13 +108,14 @@ renderDial (cx,cy) dx inner outer n txts = do
   save
   identityMatrix
   translate cx cy
-  forM_ (zip3 txts angles (rot angles)) $ \((active,t),a0,a1) -> do
+  active <- forM (zip3 txts angles (rot angles)) $ \(t,a0,a1) -> do
      newPath
      arcNegative 0 0 inner (a0-daIn) (a1+daIn)
      arc 0 0 outer (a1+daOut) (a0-daOut)
      closePath
      setSourceRGBA 0 0 0 1
      strokePreserve
+     active <- inFill (x-cx) (y-cy)
      when active $ do
        setSourceRGBA 0 0 1 0.4
        fill
@@ -120,7 +125,9 @@ renderDial (cx,cy) dx inner outer n txts = do
      setFontSize 15
      showText t
      restore
+     return active
   restore
+  return $ findIndex id active
 
 renderSelection :: Selection -> Render ()
 renderSelection (Selection bbox cs) = do
