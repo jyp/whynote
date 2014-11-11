@@ -58,6 +58,9 @@ eventM name eMask after obj fun = do
   return id
 
 
+touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
+touchEvent = Signal (eventM "touch_event" [TouchMask])
+
 -- | 
 foreign import ccall "c_initdevice.h initdevice" c_initdevice
   ::
