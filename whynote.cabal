@@ -7,7 +7,7 @@ description:
 license:        GPL-3
 author:         Jean-Philippe Bernardy
 maintainer:     jeanphilippe.bernardy@gmail.com
-Cabal-Version:  >= 1.12
+Cabal-Version:  >= 1.18
 build-type:     Simple
 
 executable whynote
@@ -28,7 +28,7 @@ executable whynote
   build-depends: vector >= 0.10
   build-depends: old-locale
 
-  main-is: Test.hs
+  main-is: Main.hs
   other-modules: Device
   cc-options:      -Wno-pointer-to-int-cast -std=gnu99 -DDEBUG  -fPIC
   ghc-options: -rtsopts -threaded

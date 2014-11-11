@@ -18,9 +18,6 @@ import Data.Time.Format
 import System.Mem
 import Control.Concurrent (forkIO)
 
-touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
-touchEvent = Signal (eventM "touch_event" [TouchMask])
-
 main :: IO ()
 main = do
      args <- initGUI
@@ -32,7 +29,7 @@ main = do
          dat <- loadState fname
          return (dat,fname)
        _ -> error "Give 0 or 1 argument"
-       
+
      cfg <- loadConfig
      window <- windowNew
      set window [windowTitle := "WhyNote",
@@ -64,11 +61,6 @@ main = do
        cont <- readIORef continuation
        putStrLn $ "Current state: " ++ show cont
        return False
-
-     let save = do
-           state <- readIORef continuation
-           
-           return ()
 
      nextSaveTime <- newIORef (0 :: TimeStamp)
      lastStylusTime <- newIORef (0 :: TimeStamp)
