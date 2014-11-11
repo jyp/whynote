@@ -7,7 +7,7 @@ description:
 license:        GPL-3
 author:         Jean-Philippe Bernardy
 maintainer:     jeanphilippe.bernardy@gmail.com
-Cabal-Version:  >= 1.12
+Cabal-Version:  >= 1.18
 build-type:     Simple
 
 executable whynote
