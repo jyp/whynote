@@ -4,7 +4,7 @@ import qualified Prelude as P
 import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
 import Event
--- import Control.Monad 
+import Control.Monad (when)
 import NoteData
 import qualified Data.Vector as V
 import Data.Traversable
@@ -91,6 +91,36 @@ boxRectangle (Box lo hi) =
   lo `xy` \lx ly ->
   (hi-lo) `xy` 
   rectangle lx ly
+
+type Point = (Double,Double)
+
+renderDial :: Point -> Double -> Double -> Double -> Int -> [(Bool,String)] -> Render ()
+renderDial (cx,cy) dx inner outer n txts = do
+  let angles :: [Double]
+      angles = map (+shift) [0,-2*pi/(fromIntegral n).. -2*pi]
+      shift = pi*fromIntegral (length txts)/(fromIntegral n)
+      daIn = dx/inner
+      daOut = dx/outer
+  save
+  identityMatrix
+  translate cx cy
+  forM_ (zip3 txts angles (rot angles)) $ \((active,t),a0,a1) -> do
+     newPath
+     arcNegative 0 0 inner (a0-daIn) (a1+daIn)
+     arc 0 0 outer (a1+daOut) (a0-daOut)
+     closePath
+     setSourceRGBA 0 0 0 1
+     strokePreserve
+     when active $ do
+       setSourceRGBA 0 0 1 0.4
+       fill
+     save
+     rotate ((a0+a1)/2)
+     moveTo (inner+5) 0
+     setFontSize 15
+     showText t
+     restore
+  restore
 
 renderSelection :: Selection -> Render ()
 renderSelection (Selection bbox cs) = do
