@@ -74,6 +74,11 @@ deselect = do
   stSelection .= emptySelection
   invalidate $ bbox
 
+deselectProcess :: Source -> GtkP ()
+deselectProcess source = do
+  deselect
+  waitForRelease source
+
 lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
   deselect
@@ -174,21 +179,6 @@ touchProcess selection origTrans touches
     _ -> cont touches
 
 
-  -- liftIO $ xprint (a0,a1,factor)
-  -- let Translation z0 x0 y0 = origTrans
-  -- let c = avg a0 a1
-  --     d = a1 - a0
-  --     (cx,cy) = xy c (,)
-  --     (dx,dy) = xy d (,)
-  --     z1 = max 0.1 (z0*factor)
-  --     factor' = z1 / z0
-  --     f = z0*(1-factor')
-  --     -- we want: cx*z0 + x0 = cx*z0*factor + x1
-  --     -- solve for x1: x1 = cx*z0 (1 - factor) + x0 
-  -- stTranslation .= Translation z1 (x0 + dx + cx*f) (y0 + dy + cy*f)
-  -- invalidateAll
-
-
 transSheet origTrans a0 a1 factor = do
   let Translation z0 dx0 dy0 = origTrans
   let d = a1 - a0
@@ -198,8 +188,6 @@ transSheet origTrans a0 a1 factor = do
       (a1x,a1y) = xy a1 (,)
   stTranslation .= Translation z1 (dx0 + z0 * a1x - z1 * a0x) (dy0 + z0 * a1y - z1 * a0y)
   invalidateAll
-
-
 
 transSel origSel a0 a1 factor = do
   -- liftIO $ print (a0,a1,factor)
@@ -241,32 +229,33 @@ moveSelWithPen origSel origCoord = do
         moveSelWithPen origSel origCoord
     _ -> do moveSelWithPen origSel origCoord -- ignore events from another source
 
-waitForRelease = do
+waitForRelease source = do
   ev <- wait "wait pen release"
-  case eventSource ev of
-    Stylus -> case ev of
+  if eventSource ev /= source then waitForRelease source else do
+    case ev of
       Event {eventType  = Event.Release} -> return ()
       Event {eventModifiers = 0} -> return () -- motion without any pressed key
-      _ -> waitForRelease
-    _ -> waitForRelease
+      _ -> waitForRelease source
   
-strokeSel p = do
-  s <- use stSelection
-  if p `inArea` s
-     then moveSelWithPen s p
-     else do deselect
-             waitForRelease
-
 render r = do
   dw <- view ctxDrawWindow
   liftIO $ Gtk.renderWithDrawWindow dw r
 
-menu p c = do
+distC :: (Int,Int) ->  (Int,Int) -> Int -> Bool
+distC (x1,y1)(x2,y2) d = sq(x2-x1) + sq(y2-y1) > sq d
+  where sq x = x*x
+
+menu ::  Coord -> [(String,Coord -> GtkP ())] -> GtkP ()
+menu c options = do
+  c' <- screenCoords c
+  menu' c' c' options
+
+menu' p c options = do
   let exit = do stRender .= return (); invalidateAll; return ()
-  if fst p - fst c > 100
+  if distC p c 100
      then exit
      else do
-       let rMenu show p'' = renderMenu show p'' c ["Pen Color","Quit"]
+       let rMenu show p'' = renderMenu show p'' c $ map fst options
        stRender .= (rMenu True p >> return ())
        invalidateAll -- optimize
        Event {..} <- wait "menu"
@@ -275,9 +264,9 @@ menu p c = do
        liftIO $ print active
        case eventType of
          Press -> case active of
-           Just _ -> liftIO $ Gtk.mainQuit
+           Just i -> (map snd options !! i) eventCoord
            Nothing -> exit
-         _ -> menu p' c
+         _ -> menu' p' c options
 
 -- 1: shift
 -- 256 mouse 1
@@ -288,20 +277,32 @@ mainProcess = do
   ev <- wait "top-level"
   when (eventType ev == Press) $
     liftIO $ print ev
+  sel <- use stSelection
   haveSel <- not . isEmptySetection <$> use stSelection
   let pressure = coordZ $ eventCoord $ ev
       havePressure = pressure > 0.01
+      haveSel = not . isEmptySetection $ sel
+      inSel = haveSel && (eventCoord ev `inArea` sel)
   c@(cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu c c
+       menu eventCoord [("Quit",\_ -> liftIO $ Gtk.mainQuit)]
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
-        then strokeSel eventCoord
+        then if inSel 
+                then moveSelWithPen sel eventCoord
+                else deselectProcess Stylus
         else stroke (eventSource ev)
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
-      eraseNear (eventCoord)
-      eraseProcess (eventSource ev)
+      if haveSel
+        then if inSel
+                then do
+                  stSelection .= emptySelection
+                  waitForRelease Eraser
+                else deselectProcess Eraser
+        else do
+          eraseNear (eventCoord)
+          eraseProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=512,..} | havePressure  -> do
       lassoProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
