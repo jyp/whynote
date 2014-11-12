@@ -1,6 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
 module App where
-
 import Control.Lens hiding (transform)
 import Control.Monad
 import Control.Monad.IO.Class
@@ -12,7 +11,7 @@ import Render
 import WNPrelude
 import qualified Data.Map.Strict as M
 import qualified Graphics.UI.Gtk as Gtk
-import qualified Prelude
+import Prelude ()
 import qualified Process
 import Data.Bits
 import qualified Data.Vector as V
@@ -264,16 +263,16 @@ render r = do
 
 menu p c = do
   let exit = do stRender .= return (); invalidateAll; return ()
-  if fst p > 100
+  if fst p - fst c > 100
      then exit
      else do
-       let rMenu = renderMenu p c ["Pen Color","Quit"]
-       stRender .= (rMenu >> return ())
-       active <- render rMenu
-       liftIO $ print active
+       let rMenu show p'' = renderMenu show p'' c ["Pen Color","Quit"]
+       stRender .= (rMenu True p >> return ())
        invalidateAll -- optimize
        Event {..} <- wait "menu"
        p' <- screenCoords eventCoord
+       active <- render $ rMenu False p'
+       liftIO $ print active
        case eventType of
          Press -> case active of
            Just _ -> liftIO $ Gtk.mainQuit
@@ -303,8 +302,9 @@ mainProcess = do
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
       eraseNear (eventCoord)
       eraseProcess (eventSource ev)
+    Event {eventSource = Stylus,eventModifiers=512,..} | havePressure  -> do
+      lassoProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
-      -- lassoProcess (eventSource ev)
       selectProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do

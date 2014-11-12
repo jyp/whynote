@@ -96,38 +96,47 @@ boxRectangle (Box lo hi) =
 type Point = (Double,Double)
 
 ptDouble (x,y) = (fromIntegral x, fromIntegral y)
-renderMenu p c txts = renderDial (ptDouble p) (ptDouble c) 5 50 100 12 txts
+renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 50 100 12 txts
 
-renderDial :: Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
-renderDial (x,y) (cx,cy) dx inner outer n txts = do
+saveEx p = do
+  save
+  x <- p
+  restore
+  return x
+
+renderDial :: Bool -> Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
+renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
   let angles :: [Double]
       angles = map (+shift) [0,-2*pi/(fromIntegral n).. -2*pi]
       shift = pi*fromIntegral (length txts)/(fromIntegral n)
       daIn = dx/inner
       daOut = dx/outer
-  save
   identityMatrix
   translate cx cy
-  active <- forM (zip3 txts angles (rot angles)) $ \(t,a0,a1) -> do
+  actives <- forM (zip3 txts angles (rot angles)) $ \(t,a0,a1) -> do
      newPath
+     setSourceRGBA 0 0 0 1
      arcNegative 0 0 inner (a0-daIn) (a1+daIn)
      arc 0 0 outer (a1+daOut) (a0-daOut)
      closePath
-     setSourceRGBA 0 0 0 1
-     strokePreserve
      active <- inFill (x-cx) (y-cy)
-     when active $ do
-       setSourceRGBA 0 0 1 0.4
-       fill
-     save
-     rotate ((a0+a1)/2)
-     moveTo (inner+5) 0
-     setFontSize 15
-     showText t
-     restore
+     when doRender $ do
+       setFillRule FillRuleWinding
+       if active
+         then setSourceRGBA 0 0 1 0.4
+         else setSourceRGBA 1 1 1 1
+       fillPreserve
+       setSourceRGBA 0 0 0 1
+       stroke
+     saveEx $ do
+       rotate ((a0+a1)/2)
+       moveTo (inner+5) 5
+       setSourceRGBA 0 0 0 1
+       setFontSize 15
+       when doRender $ showText t
      return active
-  restore
-  return $ findIndex id active
+  -- liftIO $ print active
+  return $ findIndex id actives
 
 renderSelection :: Selection -> Render ()
 renderSelection (Selection bbox cs) = do
