@@ -13,7 +13,6 @@ build-type:     Simple
 executable whynote
   default-language: Haskell2010
   build-depends: base>=4
-  build-depends: glib
   build-depends: mtl >= 2
   build-depends: gtk3
   build-depends: cairo

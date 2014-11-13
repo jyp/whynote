@@ -33,7 +33,8 @@ instance Area Selection where
   nearArea d p (Selection b _) = nearArea d p b
 emptySelection = Selection (Box zero zero) []
 isEmptySetection (Selection _ xs) = null xs
-
+instance HasBox Selection where
+  boundingBox (Selection bbox _) = bbox
 ------------------
 -- Boxes
 

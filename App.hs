@@ -245,8 +245,8 @@ distC :: (Int,Int) ->  (Int,Int) -> Int -> Bool
 distC (x1,y1)(x2,y2) d = sq(x2-x1) + sq(y2-y1) > sq d
   where sq x = x*x
 
-menu ::  Coord -> [(String,Coord -> GtkP ())] -> GtkP ()
-menu c options = do
+menu :: [(String,Coord -> GtkP ())] -> Coord -> GtkP ()
+menu options c = do
   c' <- screenCoords c
   menu' c' c' options
 
@@ -278,14 +278,14 @@ mainProcess = do
   when (eventType ev == Press) $
     liftIO $ print ev
   sel <- use stSelection
-  let pressure = coordZ $ eventCoord $ ev
+  let pressure = coordZ$ eventCoord $ ev
       havePressure = pressure > 0.01
       haveSel = not . isEmptySetection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
   (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu eventCoord [("Quit",\_ -> quit)]
+       menu [("Quit",menu [("Confirm",\_ -> quit)])] eventCoord
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
         then if inSel 
@@ -297,6 +297,7 @@ mainProcess = do
         then if inSel
                 then do
                   stSelection .= emptySelection
+                  invalidate $ boundingBox sel
                   waitForRelease Eraser
                 else deselectProcess Eraser
         else do
@@ -309,7 +310,6 @@ mainProcess = do
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
         tr <- use stTranslation
-        sel <- use stSelection
         touchProcess sel tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
     Event {eventSource = Touch,..} | eventModifiers .&. 256 /= 0 -> do
       when (eventType `elem` [Press,Motion]) $ do
