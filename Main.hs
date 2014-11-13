@@ -77,15 +77,20 @@ main = do
              unless (eventSource ev' `elem` [Touch,MultiTouch]
                      && t - time0 < 150) $ do
                oldState <- readIORef continuation
-               nextSave <- readIORef nextSaveTime
-               -- Save the file every second
-               when (t > nextSave) $ do
-                  forkIO $ writeState fname oldState
-                  writeIORef nextSaveTime (t + 5000)
-               newState <- resume oldState ev'
-               -- print newState
-               writeIORef continuation newState
-               -- System.Mem.performGC
+               case oldState of
+                 Done s -> do
+                   writeState fname s
+                   mainQuit
+                 Wait s _ k -> do
+                   nextSave <- readIORef nextSaveTime
+                   -- Save the file every second
+                   when (t > nextSave) $ do
+                      forkIO $ writeState fname s
+                      writeIORef nextSaveTime (t + 5000)
+                   newState <- resume oldState ev'
+                   -- print newState
+                   writeIORef continuation newState
+                   -- System.Mem.performGC
            return True
 
      on canvas touchEvent handleEvent
@@ -93,6 +98,8 @@ main = do
      on canvas buttonPressEvent handleEvent
      on window objectDestroy $ do
        oldState <- readIORef continuation
-       writeState fname oldState
+       case oldState of
+         Wait s _ _ -> writeState fname s
+         _ -> return ()
        mainQuit
      mainGUI

@@ -69,7 +69,10 @@ translateEvent (Translation z dx dy) Event {eventCoord = Coord{..},..} = Event{.
 --         ty a = dy + f*fromIntegral a
 --         f = 1/z
   
-  
+quit :: GtkP ()
+quit = do
+  GtkP $ lift $ P $ \_k s -> Done s
+
 waitInTrans tr msg = translateEvent tr <$> Process.wait msg
 
 wait msg = do
@@ -84,11 +87,11 @@ renderAll St{..} msg = do
    renderNoteData _stNoteData
    renderSelection _stSelection
 
-writeState :: String -> Process St Event -> IO ()
-writeState fname (Wait St {..} msg _cont) = writeNote fname (NoteFile _stNoteData)
-writeState _ s = putStrLn $ "Warning: cannot save from state: " ++ show s
+writeState :: String -> St -> IO ()
+writeState fname St {..} = writeNote fname (NoteFile _stNoteData)
 
 loadState :: String -> IO NoteData
 loadState fname = do
   NoteFile s <- readNote fname
   return s
+
