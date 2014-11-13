@@ -278,12 +278,11 @@ mainProcess = do
   when (eventType ev == Press) $
     liftIO $ print ev
   sel <- use stSelection
-  haveSel <- not . isEmptySetection <$> use stSelection
   let pressure = coordZ $ eventCoord $ ev
       havePressure = pressure > 0.01
       haveSel = not . isEmptySetection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
-  c@(cx,_) <- screenCoords (eventCoord ev)
+  (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
        menu eventCoord [("Quit",\_ -> liftIO $ Gtk.mainQuit)]
