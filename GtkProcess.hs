@@ -29,6 +29,7 @@ $(makeLenses ''Ctx)
 data St = 
   St { _stRender :: Render ()
      , _stNoteData :: NoteData
+     , _stRedo :: [Stroke]
      , _stSelection :: Selection
      , _stTranslation :: Translation
      }
@@ -41,6 +42,7 @@ initSt dat =
     ,_stNoteData = dat
     ,_stSelection = emptySelection
     ,_stTranslation = Translation 1 0 0
+    ,_stRedo = []
     }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
@@ -83,9 +85,9 @@ renderAll St{..} msg = do
    -- moveTo 0 10
    -- showText $ msg
    setMatrix $ makeTranslationMatrix _stTranslation
-   _stRender
    renderNoteData _stNoteData
    renderSelection _stSelection
+   _stRender
 
 writeState :: String -> St -> IO ()
 writeState fname St {..} = writeNote fname (NoteFile _stNoteData)

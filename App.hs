@@ -241,6 +241,22 @@ render r = do
   dw <- view ctxDrawWindow
   liftIO $ Gtk.renderWithDrawWindow dw r
 
+shiftUndos n (us,d:ds) | n > 0 = shiftUndos (n-1) (d:us,ds)
+shiftUndos n (u:us,ds) | n < 0 = shiftUndos (n+1) (us,u:ds)
+shiftUndos n x = x
+
+undoProcess y0 st = do
+  ev <- wait "undo"
+  (_,y) <- screenCoords $ eventCoord $ ev
+  let (newRedo,kept) = shiftUndos dy st
+      dy = (y-y0) `div` 10
+  stNoteData .= kept
+  stRedo .= newRedo
+  invalidateAll
+  case ev of
+      Event {eventType = Press} -> waitForRelease (eventSource ev)
+      _ -> undoProcess y0 st
+
 distC :: (Int,Int) ->  (Int,Int) -> Int -> Bool
 distC (x1,y1)(x2,y2) d = sq(x2-x1) + sq(y2-y1) > sq d
   where sq x = x*x
@@ -251,9 +267,9 @@ menu options c = do
   menu' c' c' options
 
 menu' p c options = do
-  let exit = do stRender .= return (); invalidateAll; return ()
+  let hideMenu = do stRender .= return (); invalidateAll; return ()
   if distC p c 100
-     then exit
+     then hideMenu
      else do
        let rMenu show p'' = renderMenu show p'' c $ map fst options
        stRender .= (rMenu True p >> return ())
@@ -261,11 +277,13 @@ menu' p c options = do
        Event {..} <- wait "menu"
        p' <- screenCoords eventCoord
        active <- render $ rMenu False p'
-       liftIO $ print active
+       -- liftIO $ print active
        case eventType of
-         Press -> case active of
-           Just i -> (map snd options !! i) eventCoord
-           Nothing -> exit
+         Press -> do
+           hideMenu
+           case active of
+              Just i -> (map snd options !! i) eventCoord
+              Nothing -> return ()
          _ -> menu' p' c options
 
 -- 1: shift
@@ -275,8 +293,7 @@ menu' p c options = do
 mainProcess :: GtkP ()
 mainProcess = do
   ev <- wait "top-level"
-  when (eventType ev == Press) $
-    liftIO $ print ev
+  -- when (eventType ev == Press) $ liftIO $ print ev
   sel <- use stSelection
   let pressure = coordZ$ eventCoord $ ev
       havePressure = pressure > 0.01
@@ -285,7 +302,12 @@ mainProcess = do
   (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu [("Quit",menu [("Confirm",\_ -> quit)])] eventCoord
+       menu [("Undo",\c -> do
+                 (_,y) <- screenCoords c
+                 dones <- use stNoteData
+                 redos <- use stRedo
+                 undoProcess y (redos,dones))
+            ,("Quit",menu [("Confirm",\_ -> quit)])] eventCoord
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
         then if inSel 

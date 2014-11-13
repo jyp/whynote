@@ -53,9 +53,10 @@ main = do
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
-         Wait st msg _ <- readIORef continuation
-         renderWithDrawWindow drawin $ renderAll st msg
-         return ()
+         k <- readIORef continuation
+         case k of
+           Wait st msg _ -> renderWithDrawWindow drawin $ renderAll st msg
+           _ -> return ()
 
      on canvas keyPressEvent $ liftIO $ do
        cont <- readIORef continuation
