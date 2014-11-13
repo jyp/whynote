@@ -96,7 +96,7 @@ addToSelection strks = do
       bbox1 = extend 10 $ boundingBox s1
   stSelection .= Selection bbox1 s1
   invalidate bbox1
-    
+
 selectNear :: Coord -> GtkP ()
 selectNear p = do
   (selected,kept) <- partitionStrokesNear 10 p <$> use stNoteData
@@ -285,7 +285,7 @@ mainProcess = do
   (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu eventCoord [("Quit",\_ -> liftIO $ Gtk.mainQuit)]
+       menu eventCoord [("Quit",\_ -> quit)]
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
         then if inSel 

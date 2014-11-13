@@ -9,20 +9,20 @@ import Control.Applicative
 class Monad m => MonadProcess e m | m -> e where
   wait :: String -> m e
   pushBack :: e -> m ()
-  
+
 data Process s e where
   Wait :: s -> String -> (s -> e -> Process s e) -> Process s e
   Do :: IO a -> (a -> Process s e) -> Process s e
-  Done :: Process s e
+  Done :: s -> Process s e
 
 pushBackInternal :: e -> Process s e -> Process s e
 pushBackInternal e k0 = case k0 of
-  Done -> Done
+  Done s -> Done s
   Wait s _ k -> k s e
   Do act k -> Do act (\a -> pushBackInternal e (k a))
 
 instance Show (Process s e) where
-  show Done = "<DONE>"
+  show (Done _) = "<DONE>"
   show (Do _ _) = "<DO>"
   show (Wait _ s _) = "<WAIT " ++ s ++ ">"
 
@@ -62,7 +62,7 @@ waitP s p = do
      else waitP s p
 
 run :: s -> P s e a -> Process s e
-run s0 (P x) = x (\_ _ -> Done) s0
+run s0 (P x) = x (\_ s -> Done s) s0
 
 exec :: Process s e -> IO (Process s e)
 exec (Do x k) = do
