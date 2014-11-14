@@ -10,7 +10,7 @@ import Prelude.YAP hiding (foldr)
 import Control.Applicative
 import Data.YAP.Algebra
 import Data.Word
-import Data.Foldable (foldr)
+import Data.Foldable (foldr,toList)
 
 import qualified Prelude as P
 

@@ -32,6 +32,7 @@ data St =
      , _stRedo :: [Stroke]
      , _stSelection :: Selection
      , _stTranslation :: Translation
+     , _stPen :: PenOptions
      }
 
 $(makeLenses ''St)

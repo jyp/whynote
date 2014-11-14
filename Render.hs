@@ -33,24 +33,24 @@ drawLasso (Closed c)
     Cairo.fill
 
 drawStroke :: Stroke -> Cairo.Render ()
-drawStroke (Stroke (Boxed _ c)) = do
+drawStroke (Stroke opts (Boxed _ c)) = do
   Cairo.setSourceRGBA 0 0 0 1
   Cairo.setFillRule Cairo.FillRuleWinding
-  strokePath c
+  strokePath opts c
   Cairo.fill
 
 drawStrokeSelected :: Stroke -> Cairo.Render ()
-drawStrokeSelected (Stroke (Boxed _ c)) = do
-  strokePath c
-  setLineWidth 3
+drawStrokeSelected (Stroke opts (Boxed _ c)) = do
+  strokePath opts c
+  -- setLineWidth 2
   -- Cairo.setSourceRGBA 0.5 0.5 0.5 1
   -- strokePreserve
   Cairo.setSourceRGBA 1 1 1 1
   Cairo.setFillRule Cairo.FillRuleWinding
   Cairo.fill  
 
-strokePath :: Curve -> Cairo.Render ()
-strokePath (Curve c)
+strokePath :: PenOptions -> Curve -> Cairo.Render ()
+strokePath (PenOptions penWidth) (Curve c)
   | V.length c <= 1 = return ()
   | otherwise = do
     let phead@(Coord xo yo _z0 _t0) = V.head c
@@ -66,7 +66,6 @@ strokePath (Curve c)
         (x1,y1) .-. (x0,y0) = (x1-x0 , y1-y0)
         (x1,y1) .+. (x0,y0) = (x1+x0 , y1+y0)
         z *. (x0,y0) = (z * x0 , z * y0)
-        zFactor = 1 -- to be tuned
         forward pc0@(Coord x0 y0 z0 t0) pc1@(Coord x y z t) = do
           let p0 = (x0,y0)
               p1 = (x,y)
@@ -78,7 +77,7 @@ strokePath (Curve c)
                -- shift the current position perpendicularly to the
                -- direction of movement, by an amount proportional to
                -- the pressure (z).
-               let shift = turn $ ((1/dist) * z * zFactor) *. dp
+               let shift = turn $ ((1/dist) * z * penWidth) *. dp
                P.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
 
@@ -95,8 +94,10 @@ boxRectangle (Box lo hi) =
 
 type Point = (Double,Double)
 
+menuInnerCircle = 50
+menuOuterCircle = 150
 ptDouble (x,y) = (fromIntegral x, fromIntegral y)
-renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 50 100 12 txts
+renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 menuInnerCircle menuOuterCircle 12 txts
 
 saveEx p = do
   save

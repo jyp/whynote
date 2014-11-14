@@ -27,6 +27,7 @@ executable whynote
   build-depends: bytestring >= 0.10
   build-depends: vector >= 0.10
   build-depends: old-locale
+  build-depends: unordered-containers
 
   main-is: Main.hs
   other-modules: Device

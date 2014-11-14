@@ -36,7 +36,8 @@ invalidate b0 = do
 
 strokeLoop :: Source -> [Coord] -> GtkP Stroke
 strokeLoop source c = do
-  let res = Stroke (box $ Curve $ V.fromList c)
+  opts <- use stPen
+  let res = Stroke opts (box $ Curve $ V.fromList c)
   stRender .= drawStroke res 
   invalidate $ boundingBox c
   ev <- wait "next stroke point"
@@ -268,7 +269,7 @@ menu options c = do
 
 menu' p c options = do
   let hideMenu = do stRender .= return (); invalidateAll; return ()
-  if distC p c 100
+  if distC p c (round menuOuterCircle)
      then hideMenu
      else do
        let rMenu show p'' = renderMenu show p'' c $ map fst options
@@ -286,6 +287,7 @@ menu' p c options = do
               Nothing -> return ()
          _ -> menu' p' c options
 
+penSizeMenu = [(show sz,\_ -> stPen .= PenOptions sz) | sz <- [0.3,1,3,10,30]]
 -- 1: shift
 -- 256 mouse 1
 -- 512 mouse 2 (mid)
@@ -302,7 +304,8 @@ mainProcess = do
   (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu [("Undo",\c -> do
+       menu [("Pen size",menu penSizeMenu)
+            ,("Undo",\c -> do
                  (_,y) <- screenCoords c
                  dones <- use stNoteData
                  redos <- use stRedo
@@ -310,7 +313,7 @@ mainProcess = do
             ,("Quit",menu [("Confirm",\_ -> quit)])] eventCoord
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
-        then if inSel 
+        then if inSel
                 then moveSelWithPen sel eventCoord
                 else deselectProcess Stylus
         else stroke (eventSource ev)

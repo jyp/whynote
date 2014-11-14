@@ -5,7 +5,7 @@ import WNPrelude
 import Control.Applicative
 import Data.Aeson
 import Data.Monoid
-
+import Data.HashMap.Strict as H (union)
 import Data.List
 import Data.Word
 import qualified Data.Vector as V
@@ -17,6 +17,11 @@ data Coord = Coord { coordX :: Double
                    }
            deriving (Show,Eq,Ord)
 
+data PenOptions =
+  PenOptions
+  {
+    penWidth :: Double
+  }
 instance AbelianGroup Coord where
   Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2)(t1+t2)
   Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2)(t1-t2)
@@ -116,8 +121,14 @@ newtype Curve = Curve (V.Vector Coord)
   deriving (HasBox, TwoD)
 newtype ClosedCurve = Closed (V.Vector Coord)
   deriving (HasBox, TwoD)
-newtype Stroke = Stroke (Boxed Curve)
-  deriving (HasBox, TwoD, Area)
+data Stroke = Stroke PenOptions (Boxed Curve)
+instance HasBox Stroke where
+  boundingBox (Stroke _ x) = boundingBox x
+instance TwoD Stroke where
+  transform tr (Stroke opts x) = Stroke opts (transform tr x)
+instance Area Stroke where
+  inArea p (Stroke _ x) = inArea p x
+  nearArea d p (Stroke _ x) = nearArea d p x
 type NoteData = [Stroke]
 
 
@@ -168,7 +179,7 @@ instance Area ClosedCurve where
           winding = V.sum dqs `div` 4
 
 strokeInArea :: Area a => Stroke -> a -> Bool
-(Stroke (Boxed _ (Curve s1))) `strokeInArea` s2 = V.all (`inArea` s2) s1
+(Stroke _ (Boxed _ (Curve s1))) `strokeInArea` s2 = V.all (`inArea` s2) s1
 
 instance Area Curve where
   inArea _ _ = False
@@ -200,15 +211,24 @@ instance FromJSON Curve where
     parseJSON (Object a) = Curve <$> a.: "points"
     parseJSON _ = empty
 
-instance ToJSON Curve where
-   toJSON (Curve a) = object ["points" .=  a]
 
 instance FromJSON Stroke where
-    parseJSON a = Stroke <$> parseJSON a
+    parseJSON a = Stroke <$> parseJSON a <*> parseJSON a
+
+instance FromJSON PenOptions where
+  parseJSON (Object v) = PenOptions <$> ((v .:? "width") .!= 1)
 
 instance ToJSON Stroke where
-   toJSON (Stroke c) = toJSON c
+  toJSON (Stroke opts curve) = Object (H.union opts' curve')
+     where Object opts' = toJSON opts
+           Object curve' = toJSON curve
 
+instance ToJSON Curve where
+  toJSON (Curve c) = object ["points" .= c]
+
+instance ToJSON PenOptions where
+  toJSON (PenOptions w) = object ["width" .= w]
+  
 instance ToJSON a => ToJSON (Boxed a) where
   toJSON (Boxed _ a) = toJSON a
 
