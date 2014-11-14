@@ -44,6 +44,7 @@ initSt dat =
     ,_stSelection = emptySelection
     ,_stTranslation = Translation 1 0 0
     ,_stRedo = []
+    ,_stPen = PenOptions 1
     }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
