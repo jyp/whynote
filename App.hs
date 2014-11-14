@@ -108,6 +108,7 @@ eraseNear :: Coord -> GtkP ()
 eraseNear p = do
   (erased,kept) <- partitionStrokesNear 10 p <$> use stNoteData
   invalidate $ boxUnion $ map boundingBox erased
+  stRedo %= (erased++)
   stNoteData .= kept
 
 neighbourhoodProcessLoop :: Source -> (Coord -> GtkP ()) -> GtkP ()
