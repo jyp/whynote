@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
@@ -133,7 +133,7 @@ newtype ClosedCurve = Closed (V.Vector Coord)
   deriving (HasBox, TwoD)
 data Stroke = Stroke PenOptions (Boxed Curve)
 instance HasBox Stroke where
-  boundingBox (Stroke _ x) = boundingBox x
+  boundingBox (Stroke PenOptions {_penWidth} x) = extend _penWidth $ boundingBox x
 instance TwoD Stroke where
   transform tr (Stroke opts x) = Stroke opts (transform tr x)
 instance Area Stroke where

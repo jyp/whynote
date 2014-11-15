@@ -38,8 +38,8 @@ strokeLoop :: Source -> [Coord] -> GtkP Stroke
 strokeLoop source c = do
   opts <- use stPen
   let res = Stroke opts (box $ Curve $ V.fromList c)
-  stRender .= drawStroke res 
-  invalidate $ boundingBox c
+  stRender .= drawStroke res
+  invalidate $ boundingBox $ res
   ev <- wait "next stroke point"
   case eventSource ev == source of
     False -> strokeLoop source c -- ignore events from another source
