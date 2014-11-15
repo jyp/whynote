@@ -75,34 +75,38 @@ deselect = do
   stSelection .= emptySelection
   invalidate $ bbox
 
-deselectProcess :: Source -> GtkP ()
-deselectProcess source = do
-  deselect
-  waitForRelease source
-
 lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
   deselect
   bounds <- lassoProcessLoop source []
   stRender .= return ()
   (inside,outside) <- lassoPartitionStrokes (box bounds) <$> use stNoteData
-  stSelection .= Selection (extend 10 $ boundingBox inside) inside
+  stSelection .= mkSelection inside
   stNoteData .= outside
   invalidate $ boundingBox bounds
   return ()
 
+mkSelection strks = Selection (extend 10 $ boundingBox strks) strks
+
 addToSelection strks = do
   Selection _ s0 <- use stSelection
-  let s1 = s0 ++ strks
-      bbox1 = extend 10 $ boundingBox s1
-  stSelection .= Selection bbox1 s1
-  invalidate bbox1
+  let newSel = mkSelection (s0 ++ strks)
+  stSelection .= newSel
+  invalidate $ boundingBox newSel
 
 selectNear :: Coord -> GtkP ()
 selectNear p = do
   (selected,kept) <- partitionStrokesNear 10 p <$> use stNoteData
   addToSelection selected
   stNoteData .= kept
+
+deselectNear :: Coord -> GtkP ()
+deselectNear p = do
+  Selection bbox strokes <- use stSelection
+  let (deselected,kept) = partitionStrokesNear 10 p strokes
+  stSelection .= mkSelection kept
+  stNoteData %= (++ deselected)
+  invalidate bbox
 
 eraseNear :: Coord -> GtkP ()
 eraseNear p = do
@@ -133,6 +137,12 @@ selectProcess :: Source -> GtkP ()
 selectProcess source = do
   stRender .= return ()
   neighbourhoodProcessLoop source selectNear
+  return ()
+
+deSelectProcess :: Source -> GtkP ()
+deSelectProcess source = do
+  stRender .= return ()
+  neighbourhoodProcessLoop source deselectNear
   return ()
 
 add cord Nothing = Just (cord,cord)
@@ -290,6 +300,7 @@ menu' p c options = do
 
 penSizeMenu = [(show sz,\_ -> stPen.penWidth .= sz) | sz <- [0.3,1,3,10,30]]
 penColorMenu = [("black",\_ -> stPen.penColor .= blackColor)
+               ,("highlight",\_ -> stPen.penColor .= highlightColor)
                ,("green",\_ -> stPen.penColor .= greenColor)
                ,("blue",\_ -> stPen.penColor .= blueColor)
                ,("red",\_ -> stPen.penColor .= redColor)]
@@ -322,7 +333,9 @@ mainProcess = do
       if haveSel
         then if inSel
                 then moveSelWithPen sel eventCoord
-                else deselectProcess Stylus
+                else do
+                  deselect 
+                  waitForRelease Stylus
         else stroke (eventSource ev)
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
       if haveSel
@@ -331,14 +344,18 @@ mainProcess = do
                   stSelection .= emptySelection
                   invalidate $ boundingBox sel
                   waitForRelease Eraser
-                else deselectProcess Eraser
+                else do
+                  deselect 
+                  waitForRelease Eraser
         else do
           eraseNear (eventCoord)
           eraseProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=512,..} | havePressure  -> do
       lassoProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
-      selectProcess (eventSource ev)
+      if inSel
+        then deSelectProcess (eventSource ev)
+        else selectProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
         tr <- use stTranslation

@@ -23,6 +23,7 @@ blackColor = Color 0 0 0 1
 redColor = mkColor 220 50 47
 blueColor = mkColor 38 139 210
 greenColor = mkColor 65 133 153
+highlightColor = Color 1 1 0 0.5
 
 
 data PenOptions =
