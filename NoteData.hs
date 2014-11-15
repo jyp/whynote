@@ -101,7 +101,7 @@ overlap (Box l1 h1) (Box l2 h2) =
     h2 `xy` \hx2 hy2 ->
     (lx2 <= hx1 && ly2 <= hy1) || (lx1 <= hx2 && ly1 <= hy2)
 
-data Translation = Translation {trZoom, trX, drY :: Double}
+data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 
 class TwoD a where
   transform :: Translation -> a -> a

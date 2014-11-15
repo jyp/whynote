@@ -26,6 +26,7 @@ data Ctx
         }
 
 $(makeLenses ''Ctx)
+$(makeLenses ''Translation)
 
 
 data St = 

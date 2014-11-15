@@ -96,14 +96,19 @@ addToSelection strks = do
 
 selectNear :: Coord -> GtkP ()
 selectNear p = do
-  (selected,kept) <- partitionStrokesNear 10 p <$> use stNoteData
+  f <- fuzzyFactor
+  (selected,kept) <- partitionStrokesNear f p <$> use stNoteData
   addToSelection selected
   stNoteData .= kept
 
+fuzzyFactor :: GtkP Double
+fuzzyFactor = (10 /) <$> use (stTranslation.trZoom)
+
 deselectNear :: Coord -> GtkP ()
 deselectNear p = do
+  f <- fuzzyFactor
   Selection bbox strokes <- use stSelection
-  let (deselected,kept) = partitionStrokesNear 10 p strokes
+  let (deselected,kept) = partitionStrokesNear f p strokes
   stSelection .= mkSelection kept
   stNoteData %= (++ deselected)
   invalidate bbox
