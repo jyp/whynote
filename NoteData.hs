@@ -214,25 +214,23 @@ instance ToJSON Coord where
   toJSON (Coord x y z t) = object ["x" .= x, "y" .= y, "z" .= z, "t" .= t]
 
 instance FromJSON Coord where
-  parseJSON (Object v) = Coord <$> v.: "x" <*> v.: "y" <*> v.: "z" <*> v.: "t"
-  parseJSON _ = fail "Coord object expected"
+  parseJSON = withObject "Coord" $ \v -> Coord <$> v.: "x" <*> v.: "y" <*> v.: "z" <*> v.: "t"
 
 instance FromJSON Curve where
-    parseJSON (Object a) = Curve <$> a.: "points"
-    parseJSON _ = empty
+    parseJSON = withObject "Curve" $ \a -> Curve <$> a.: "points"
 
 
 instance FromJSON Stroke where
     parseJSON a = Stroke <$> parseJSON a <*> parseJSON a
 
 instance FromJSON PenOptions where
-  parseJSON (Object v) = PenOptions <$> ((v .:? "width") .!= 1) <*> ((v .:? "color") .!= blackColor)
+  parseJSON = withObject "PenOptions" $ \v -> PenOptions <$> ((v .:? "width") .!= 1) <*> ((v .:? "color") .!= blackColor)
 
 instance ToJSON PenOptions where
   toJSON (PenOptions w c) = object ["width" .= w,"color" .= c]
 
 instance FromJSON Color where
-  parseJSON (Object v) = Color <$> v.:"r" <*> v.:"g" <*> v.:"b" <*> v.:"a"
+  parseJSON = withObject "color" $ \v -> Color <$> v.:"r" <*> v.:"g" <*> v.:"b" <*> v.:"a"
 
 instance ToJSON Color where
   toJSON (Color r g b a) = object ["r" .= r, "g" .= g, "b" .= b, "a" .= a]
