@@ -18,6 +18,8 @@ import NoteData
 import Render
 import File
 
+$(makeLenses ''PenOptions)
+
 data Ctx
   = Ctx { _ctxDrawWindow :: Gtk.DrawWindow
         , _ctxCanvas :: Gtk.DrawingArea
@@ -44,7 +46,7 @@ initSt dat =
     ,_stSelection = emptySelection
     ,_stTranslation = Translation 1 0 0
     ,_stRedo = []
-    ,_stPen = PenOptions 1
+    ,_stPen = defaultPen
     }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}

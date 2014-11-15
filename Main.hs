@@ -41,7 +41,7 @@ main = do
      devices <- initDevice (castToWidget canvas) cfg
      print devices
      containerAdd window canvas
-     widgetModifyBg canvas StateNormal (Color 65535 65535 65535)
+     widgetModifyBg canvas StateNormal (Gtk.Color 65535 65535 65535)
 
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas

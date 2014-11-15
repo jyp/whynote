@@ -288,7 +288,12 @@ menu' p c options = do
               Nothing -> return ()
          _ -> menu' p' c options
 
-penSizeMenu = [(show sz,\_ -> stPen .= PenOptions sz) | sz <- [0.3,1,3,10,30]]
+penSizeMenu = [(show sz,\_ -> stPen.penWidth .= sz) | sz <- [0.3,1,3,10,30]]
+penColorMenu = [("black",\_ -> stPen.penColor .= blackColor)
+               ,("green",\_ -> stPen.penColor .= greenColor)
+               ,("blue",\_ -> stPen.penColor .= blueColor)
+               ,("red",\_ -> stPen.penColor .= redColor)]
+
 -- 1: shift
 -- 256 mouse 1
 -- 512 mouse 2 (mid)
@@ -306,6 +311,7 @@ mainProcess = do
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
        menu [("Pen size",menu penSizeMenu)
+            ,("Pen color",menu penColorMenu)
             ,("Undo",\c -> do
                  (_,y) <- screenCoords c
                  dones <- use stNoteData

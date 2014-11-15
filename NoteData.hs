@@ -10,18 +10,27 @@ import Data.List
 import Data.Word
 import qualified Data.Vector as V
 
-data Coord = Coord { coordX :: Double
-                   , coordY :: Double
-                   , coordZ :: Double
-                   , coordT :: Word32
+data Coord = Coord { coordX :: !Double
+                   , coordY :: !Double
+                   , coordZ :: !Double
+                   , coordT :: !Word32
                    }
            deriving (Show,Eq,Ord)
 
+mkColor r g b = Color (r/256) (g/256) (b/256) 1
+data Color = Color !Double !Double !Double !Double
+blackColor = Color 0 0 0 1
+redColor = mkColor 220 50 47
+blueColor = mkColor 38 139 210
+greenColor = mkColor 65 133 153
+
+
 data PenOptions =
   PenOptions
-  {
-    penWidth :: Double
+  {_penWidth :: Double
+  ,_penColor :: Color
   }
+defaultPen = PenOptions 1 blackColor
 instance AbelianGroup Coord where
   Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2)(t1+t2)
   Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2)(t1-t2)
@@ -216,7 +225,16 @@ instance FromJSON Stroke where
     parseJSON a = Stroke <$> parseJSON a <*> parseJSON a
 
 instance FromJSON PenOptions where
-  parseJSON (Object v) = PenOptions <$> ((v .:? "width") .!= 1)
+  parseJSON (Object v) = PenOptions <$> ((v .:? "width") .!= 1) <*> ((v .:? "color") .!= blackColor)
+
+instance ToJSON PenOptions where
+  toJSON (PenOptions w c) = object ["width" .= w,"color" .= c]
+
+instance FromJSON Color where
+  parseJSON (Object v) = Color <$> v.:"r" <*> v.:"g" <*> v.:"b" <*> v.:"a"
+
+instance ToJSON Color where
+  toJSON (Color r g b a) = object ["r" .= r, "g" .= g, "b" .= b, "a" .= a]
 
 instance ToJSON Stroke where
   toJSON (Stroke opts curve) = Object (H.union opts' curve')
@@ -225,9 +243,6 @@ instance ToJSON Stroke where
 
 instance ToJSON Curve where
   toJSON (Curve c) = object ["points" .= c]
-
-instance ToJSON PenOptions where
-  toJSON (PenOptions w) = object ["width" .= w]
   
 instance ToJSON a => ToJSON (Boxed a) where
   toJSON (Boxed _ a) = toJSON a

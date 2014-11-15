@@ -32,11 +32,14 @@ drawLasso (Closed c)
     forM_ ps $ \p -> xy p lineTo
     Cairo.fill
 
+
+setSourceColor :: Color -> Render ()
+setSourceColor (Color r g b a) = Cairo.setSourceRGBA r g b a
 drawStroke :: Stroke -> Cairo.Render ()
-drawStroke (Stroke opts (Boxed _ c)) = do
-  Cairo.setSourceRGBA 0 0 0 1
+drawStroke (Stroke pen (Boxed _ c)) = do
+  setSourceColor (_penColor pen)
   Cairo.setFillRule Cairo.FillRuleWinding
-  strokePath opts c
+  strokePath pen c
   Cairo.fill
 
 drawStrokeSelected :: Stroke -> Cairo.Render ()
@@ -50,7 +53,7 @@ drawStrokeSelected (Stroke opts (Boxed _ c)) = do
   Cairo.fill  
 
 strokePath :: PenOptions -> Curve -> Cairo.Render ()
-strokePath (PenOptions penWidth) (Curve c)
+strokePath (PenOptions penWidth _) (Curve c)
   | V.length c <= 1 = return ()
   | otherwise = do
     let phead@(Coord xo yo _z0 _t0) = V.head c
