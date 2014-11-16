@@ -15,6 +15,7 @@ import Prelude ()
 import qualified Process
 import Data.Bits
 import qualified Data.Vector as V
+import Config (configuredPens)
 
 invalidateAll :: GtkP ()
 invalidateAll = do
@@ -303,12 +304,8 @@ menu' p c options = do
               Nothing -> return ()
          _ -> menu' p' c options
 
-penSizeMenu = [(show sz,\_ -> stPen.penWidth .= sz) | sz <- [0.3,1,3,10,30]]
-penColorMenu = [("black",\_ -> stPen.penColor .= blackColor)
-               ,("highlight",\_ -> stPen.penColor .= highlightColor)
-               ,("green",\_ -> stPen.penColor .= greenColor)
-               ,("blue",\_ -> stPen.penColor .= blueColor)
-               ,("red",\_ -> stPen.penColor .= redColor)]
+penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
+
 
 -- 1: shift
 -- 256 mouse 1
@@ -326,8 +323,7 @@ mainProcess = do
   (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu [("Pen size",menu penSizeMenu)
-            ,("Pen color",menu penColorMenu)
+       menu [("Pen",menu penMenu)
             ,("Undo",\c -> do
                  (_,y) <- screenCoords c
                  dones <- use stNoteData

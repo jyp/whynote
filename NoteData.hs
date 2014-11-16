@@ -1,8 +1,7 @@
-{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
-import Control.Applicative
 import Data.Aeson
 import Data.Monoid
 import Data.HashMap.Strict as H (union)
@@ -17,21 +16,18 @@ data Coord = Coord { coordX :: !Double
                    }
            deriving (Show,Eq,Ord)
 
-mkColor r g b = Color (r/256) (g/256) (b/256) 1
-data Color = Color !Double !Double !Double !Double
 blackColor = Color 0 0 0 1
-redColor = mkColor 220 50 47
-blueColor = mkColor 38 139 210
-greenColor = mkColor 65 133 153
-highlightColor = Color 1 1 0 0.5
+defaultPen = PenOptions 1 blackColor 1
+
+data Color = Color !Double !Double !Double !Double
 
 
 data PenOptions =
   PenOptions
   {_penWidth :: Double
   ,_penColor :: Color
+  ,_penSensitivity :: Double -- in range [0,1]
   }
-defaultPen = PenOptions 1 blackColor
 instance AbelianGroup Coord where
   Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2)(t1+t2)
   Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2)(t1-t2)
@@ -135,7 +131,9 @@ data Stroke = Stroke PenOptions (Boxed Curve)
 instance HasBox Stroke where
   boundingBox (Stroke PenOptions {_penWidth} x) = extend _penWidth $ boundingBox x
 instance TwoD Stroke where
-  transform tr (Stroke opts x) = Stroke opts (transform tr x)
+  transform tr (Stroke pen x) = Stroke (transform tr pen)  (transform tr x)
+instance TwoD PenOptions where
+  transform (Translation zz _ _) (PenOptions {..}) = PenOptions {_penWidth = _penWidth * zz,..}
 instance Area Stroke where
   inArea p (Stroke _ x) = inArea p x
   nearArea d p (Stroke _ x) = nearArea d p x
@@ -224,10 +222,13 @@ instance FromJSON Stroke where
     parseJSON a = Stroke <$> parseJSON a <*> parseJSON a
 
 instance FromJSON PenOptions where
-  parseJSON = withObject "PenOptions" $ \v -> PenOptions <$> ((v .:? "width") .!= 1) <*> ((v .:? "color") .!= blackColor)
+  parseJSON = withObject "PenOptions" $ \v ->
+    PenOptions <$> ((v .:? "width") .!= 1)
+               <*> ((v .:? "color") .!= blackColor)
+               <*> ((v .:? "sensitivity") .!= 1) 
 
 instance ToJSON PenOptions where
-  toJSON (PenOptions w c) = object ["width" .= w,"color" .= c]
+  toJSON (PenOptions w c s) = object ["width" .= w,"color" .= c, "sensitivity" .= s]
 
 instance FromJSON Color where
   parseJSON = withObject "color" $ \v -> Color <$> v.:"r" <*> v.:"g" <*> v.:"b" <*> v.:"a"

@@ -30,7 +30,7 @@ main = do
          return (dat,fname)
        _ -> error "Give 0 or 1 argument"
 
-     WNConfig devicesCfg pens <- loadConfig
+     WNConfig devicesCfg <- loadConfig
      window <- windowNew
      set window [windowTitle := "WhyNote",
                  windowDefaultWidth := 1000, windowDefaultHeight := 600]

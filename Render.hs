@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 module Render where
 
 import qualified Prelude as P
@@ -53,7 +54,7 @@ drawStrokeSelected (Stroke opts (Boxed _ c)) = do
   Cairo.fill  
 
 strokePath :: PenOptions -> Curve -> Cairo.Render ()
-strokePath (PenOptions penWidth _) (Curve c)
+strokePath (PenOptions {..}) (Curve c)
   | V.length c <= 1 = return ()
   | otherwise = do
     let phead@(Coord xo yo _z0 _t0) = V.head c
@@ -66,6 +67,8 @@ strokePath (PenOptions penWidth _) (Curve c)
     V.foldM_ forward plast rxs
   where turn (x,y) = (negate y,x)
         norm (x,y) = sqrt (x*x + y*y)
+        sentitiveWidth = _penWidth * _penSensitivity
+        constWidth = _penWidth * (1 - _penSensitivity)
         (x1,y1) .-. (x0,y0) = (x1-x0 , y1-y0)
         (x1,y1) .+. (x0,y0) = (x1+x0 , y1+y0)
         z *. (x0,y0) = (z * x0 , z * y0)
@@ -80,7 +83,7 @@ strokePath (PenOptions penWidth _) (Curve c)
                -- shift the current position perpendicularly to the
                -- direction of movement, by an amount proportional to
                -- the pressure (z).
-               let shift = turn $ ((1/dist) * z * penWidth) *. dp
+               let shift = turn $ ((1/dist) * (z * sentitiveWidth + constWidth)) *. dp
                P.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
 
@@ -127,7 +130,7 @@ renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
      when doRender $ do
        setFillRule FillRuleWinding
        if active
-         then setSourceRGBA 0 0 1 0.4
+         then setSourceRGBA 0.5 0.5 1 1
          else setSourceRGBA 1 1 1 1
        fillPreserve
        setSourceRGBA 0 0 0 1
