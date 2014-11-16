@@ -30,7 +30,7 @@ main = do
          return (dat,fname)
        _ -> error "Give 0 or 1 argument"
 
-     cfg <- loadConfig
+     WNConfig devicesCfg pens <- loadConfig
      window <- windowNew
      set window [windowTitle := "WhyNote",
                  windowDefaultWidth := 1000, windowDefaultHeight := 600]
@@ -38,7 +38,7 @@ main = do
      canvas <- drawingAreaNew
      set canvas [widgetCanFocus := True]
      Gtk.widgetGrabFocus canvas
-     devices <- initDevice (castToWidget canvas) cfg
+     devices <- initDevice (castToWidget canvas) devicesCfg
      print devices
      containerAdd window canvas
      widgetModifyBg canvas StateNormal (Gtk.Color 65535 65535 65535)

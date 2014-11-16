@@ -88,8 +88,8 @@ setEventCompression dw x =
     gdk_window_set_event_compression w x
 
 -- | 
-initDevice :: Widget -> Config.WNConfig -> IO DeviceList  
-initDevice widget (Config.WNConfig{..}) =
+initDevice :: Widget -> Config.Devices -> IO DeviceList  
+initDevice widget (Config.Devices{..}) =
   withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w ->
     with 0 $ \pstylus ->
       with 0 $ \peraser ->
