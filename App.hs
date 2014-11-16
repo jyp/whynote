@@ -105,6 +105,12 @@ selectNear p = do
 fuzzyFactor :: GtkP Double
 fuzzyFactor = (10 /) <$> use (stTranslation.trZoom)
 
+deleteSelection = do
+  Selection bbox sel <- use stSelection
+  stSelection .= emptySelection
+  stRedo %= (sel++)
+  invalidate $ boundingBox bbox
+
 deselectNear :: Coord -> GtkP ()
 deselectNear p = do
   f <- fuzzyFactor
@@ -323,13 +329,17 @@ mainProcess = do
   (cx,_) <- screenCoords (eventCoord ev)
   case ev of
     Event {eventSource = Stylus,..} | cx < 30 -> do
-       menu [("Pen",menu penMenu)
+      menu ([("Delete",\_ -> do
+                 deleteSelection
+                 stSelection .= emptySelection
+                 ) | haveSel] ++
+            [("Pen",menu penMenu)
             ,("Undo",\c -> do
                  (_,y) <- screenCoords c
                  dones <- use stNoteData
                  redos <- use stRedo
                  undoProcess y (redos,dones))
-            ,("Quit",menu [("Confirm",\_ -> quit)])] eventCoord
+            ,("Quit",menu [("Confirm",\_ -> quit)])]) eventCoord
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
       if haveSel
         then if inSel
@@ -342,8 +352,7 @@ mainProcess = do
       if haveSel
         then if inSel
                 then do
-                  stSelection .= emptySelection
-                  invalidate $ boundingBox sel
+                  deleteSelection
                   waitForRelease Eraser
                 else do
                   deselect 
