@@ -30,6 +30,6 @@ greenColor = mkColor 65 133 153
 highlightColor = Color 1 1 0 0.5
 
 configuredPens = [("default", defaultPen),
-                  ("red", PenOptions 1 greenColor 1),
+                  ("red", PenOptions 1 redColor 1),
                   ("green", PenOptions 1 greenColor 1),
                   ("hilighter",PenOptions 20 highlightColor 0.2)]
