@@ -176,6 +176,7 @@ touchProcess selection origTrans touches
   --   putStrLn "touches"
   --   forM_ (M.assocs touches) print
   ev <- waitInTrans origTrans "multi-touch"
+  let rb = rollback ev origTrans
   case eventSource ev of
     MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
@@ -198,8 +199,8 @@ touchProcess selection origTrans touches
                   _ -> return ()
                 cont touches'
       _ -> cont touches
-    Stylus -> return ()
-    Eraser -> return ()
+    Stylus -> rb
+    Eraser -> rb
     _ -> cont touches
 
 
