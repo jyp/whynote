@@ -167,6 +167,31 @@ norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
 peri xs = sum $ zipWith dist xs (rot xs)
 
+eventTime = coordT . eventCoord
+
+touchProcessEntry :: Selection -> Translation -> Event -> GtkP ()
+touchProcessEntry sel origTrans ev =
+  touchProcess1 (eventTime ev) sel origTrans $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+
+
+-- TODO: Try to do debouncing on a per-touch basis
+touchProcess1 t0 sel origTrans touches
+  | M.null touches = return ()
+  | otherwise = do
+  ev <- waitInTrans origTrans "multi-touch entry"
+  case eventSource ev of
+    MultiTouch -> 
+      if eventTime ev - t0 > 100
+         then touchProcess sel origTrans touches
+         else case () of
+            _ | eventType ev `elem` [Cancel,End]
+              -> do touchProcess1 t0 sel origTrans $ M.delete (eventButton ev) touches
+            _ | eventType ev `elem` [Begin,Update]
+              -> do touchProcess1 t0 sel origTrans $ M.alter (add (eventCoord ev)) (eventButton ev) touches
+    Stylus -> return ()
+    Eraser -> return ()
+    _ -> touchProcess1 t0 sel origTrans touches
+
 touchProcess :: Selection -> Translation -> M.Map Int (Coord,Coord) -> GtkP ()
 touchProcess selection origTrans touches
   | M.null touches = return ()
@@ -180,7 +205,7 @@ touchProcess selection origTrans touches
   case eventSource ev of
     MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
-          -> return () 
+          -> do touchProcess selection origTrans $ M.delete (eventButton ev) touches
       _ | eventType ev `elem` [Begin,Update]
           -> do let touches' = M.alter (add (eventCoord ev)) (eventButton ev) touches
                     pss = M.elems touches'
@@ -370,7 +395,7 @@ mainProcess = do
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
         tr <- use stTranslation
-        touchProcess sel tr $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+        touchProcessEntry sel tr ev
     Event {eventSource = Touch,..} | eventModifiers .&. 256 /= 0 -> do
       when (eventType `elem` [Press,Motion]) $ do
         tr <- use stTranslation
