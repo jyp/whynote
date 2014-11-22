@@ -171,26 +171,9 @@ eventTime = coordT . eventCoord
 
 touchProcessEntry :: Selection -> Translation -> Event -> GtkP ()
 touchProcessEntry sel origTrans ev =
-  touchProcess1 (eventTime ev) sel origTrans $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+  touchProcess sel origTrans $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
 
-
--- TODO: Try to do debouncing on a per-touch basis
-touchProcess1 t0 sel origTrans touches
-  | M.null touches = return ()
-  | otherwise = do
-  ev <- waitInTrans origTrans "multi-touch entry"
-  case eventSource ev of
-    MultiTouch -> 
-      if eventTime ev - t0 > 100
-         then touchProcess sel origTrans touches
-         else case () of
-            _ | eventType ev `elem` [Cancel,End]
-              -> do touchProcess1 t0 sel origTrans $ M.delete (eventButton ev) touches
-            _ | eventType ev `elem` [Begin,Update]
-              -> do touchProcess1 t0 sel origTrans $ M.alter (add (eventCoord ev)) (eventButton ev) touches
-    Stylus -> return ()
-    Eraser -> return ()
-    _ -> touchProcess1 t0 sel origTrans touches
+oldEnough (ev0,ev) = coordT ev - coordT ev0 > 100
 
 touchProcess :: Selection -> Translation -> M.Map Int (Coord,Coord) -> GtkP ()
 touchProcess selection origTrans touches
@@ -205,10 +188,12 @@ touchProcess selection origTrans touches
   case eventSource ev of
     MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
-          -> do touchProcess selection origTrans $ M.delete (eventButton ev) touches
+          -> return ()
+             -- touchProcess selection origTrans $ M.delete (eventButton ev) touches
+             -- If we do this, then releasing 1 finger has the effect of canceling the multi-touch operation
       _ | eventType ev `elem` [Begin,Update]
           -> do let touches' = M.alter (add (eventCoord ev)) (eventButton ev) touches
-                    pss = M.elems touches'
+                    pss = filter oldEnough $ M.elems touches'
                     (ps0,ps1) = unzip pss
                     s0 = peri ps0
                     s1 = peri ps1
@@ -216,7 +201,7 @@ touchProcess selection origTrans touches
                     a0 = average ps0
                     a1 = average ps1
                     inSel = any (`inArea` selection) ps0
-                case (M.size touches',inSel) of
+                case (length pss,inSel) of
                   (1,True) -> transSel selection a0 a1 1
                   (2,True) -> transSel selection a0 a1 factor
                   (2,False) -> transSheet origTrans a0 a1 1
