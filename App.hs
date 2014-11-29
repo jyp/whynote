@@ -35,23 +35,30 @@ invalidate b0 = do
   liftIO $ do
     Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
 
-strokeLoop :: Source -> [Coord] -> GtkP Stroke
-strokeLoop source c = do
+mkStroke cs = do
   opts <- use stPen
-  let res = Stroke opts (box $ Curve $ V.fromList c)
-  stRender .= drawStroke res
-  invalidate $ boundingBox $ res
-  ev <- wait "next stroke point"
-  case eventSource ev == source of
-    False -> strokeLoop source c -- ignore events from another source
-    True -> case ev of
-      Event {eventType  = Event.Release} -> return res
-      Event {eventModifiers = 0} -> return res -- motion without any pressed key
-      _ -> strokeLoop source (eventCoord ev:c)
+  return $ Stroke opts (box $ Curve $ V.fromList cs)
 
-stroke :: Source -> GtkP ()
-stroke source = do
-  strk <- strokeLoop source []
+strokeLoop :: [Coord] -> GtkP [Coord]
+strokeLoop c = do
+  old <- mkStroke c
+  stRender .= drawStroke old
+  invalidate $ boundingBox $ old
+  ev <- wait "next stroke point"
+  let cs' = (eventCoord ev:c)
+  case eventSource ev of
+    Eraser -> return c
+    Stylus -> case ev of
+      Event {..} | eventModifiers == 0 || eventType == Event.Release || coordZ (eventCoord) == 0  -> return cs'
+      _ -> strokeLoop cs'
+    _ -> strokeLoop c -- ignore events from another source
+
+cleanStroke (a:b:c) | coordZ a == 0, coordZ b == 0 = cleanStroke (b:c)
+cleanStroke c = c
+
+stroke :: Coord -> GtkP ()
+stroke c0 = do
+  strk <- mkStroke =<< (cleanStroke . reverse) <$> strokeLoop [c0]
   stNoteData %= (strk:)
   stRender .= return ()
   return ()
@@ -130,13 +137,16 @@ eraseNear p = do
 neighbourhoodProcessLoop :: Source -> (Coord -> GtkP ()) -> GtkP ()
 neighbourhoodProcessLoop source action = do
   ev <- wait "next neighbourhood point"
-  case eventSource ev == source of
-    False -> neighbourhoodProcessLoop source action -- ignore events from another source
-    True -> case ev of
-      Event {eventType  = Event.Release} -> return ()
-      Event {eventModifiers = 0} -> return () -- motion without any pressed key
-      _ -> do action (eventCoord ev)
-              neighbourhoodProcessLoop source action
+  case source `elem` [Stylus, Eraser] of
+    False -> neighbourhoodProcessLoop source action -- ignore non-pen events
+    True -> case eventSource ev == source of
+      False -> Process.pushBack ev -- quick switch between pen/eraser
+      True -> case ev of
+        Event {..} | eventType == Event.Release
+                   || eventModifiers == 0
+                   || coordZ (eventCoord) == 0 -> return ()
+        _ -> do action (eventCoord ev)
+                neighbourhoodProcessLoop source action
 
 eraseProcess :: Source -> GtkP ()
 eraseProcess source = do
@@ -351,14 +361,14 @@ mainProcess = do
                  redos <- use stRedo
                  undoProcess y (redos,dones))
             ,("Quit",menu [("Confirm",\_ -> quit)])]) eventCoord
-    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || (eventModifiers == 256 && havePressure) -> do
+    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || eventModifiers == 256 -> do
       if haveSel
         then if inSel
                 then moveSelWithPen sel eventCoord
                 else do
                   deselect 
                   waitForRelease Stylus
-        else stroke (eventSource ev)
+        else stroke eventCoord
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
       if haveSel
         then if inSel
