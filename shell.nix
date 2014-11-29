@@ -14,7 +14,7 @@ with haskellPackages; cabal.mkDerivation (self: {
   isExecutable = true;
   buildTools = [ cabalInstall ];
   buildDepends = [
-    aeson cairo glib gtk3 lens mtl time transformers
+    aeson cairo configurator glib gtk3 lens mtl time transformers
     vector yap unorderedContainers
   ];
   meta = {
