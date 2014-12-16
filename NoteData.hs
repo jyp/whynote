@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards #-}
+{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
@@ -204,6 +204,18 @@ instance Area Coord where
 partitionStrokesNear :: Double -> Coord -> [Stroke] -> ([Stroke],[Stroke])
 partitionStrokesNear d2 p strks = partition (nearArea d2 p) strks
 
+opCoord :: (forall a. Ord a => a -> a -> a) -> Coord -> Coord -> Coord
+opCoord op (Coord x1 y1 z1 t1) (Coord x2 y2 z2 t2) = Coord (op x1 x2) (op y1 y2) (op z1 z2) (op t1 t2)
+
+minCoord = opCoord min
+maxCoord = opCoord max
+
+intersectBox (Box l1 h1) (Box l2 h2) = Box (max l1 l2) (min h1 h2)
+
+nilBox (Box (Coord x0 y0 _ _) (Coord x1 y1 _ _)) = (x0 >= x1) || (y0 >= y1)
+
+overlapBox :: Box -> Box -> Bool
+overlapBox b1 b2 = not $ nilBox $ intersectBox b1 b2
 
 ----
 -- Serialisation

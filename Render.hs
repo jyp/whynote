@@ -4,6 +4,7 @@ module Render where
 import qualified Prelude as P
 import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
+import qualified Graphics.UI.Gtk as G
 import Event
 import Control.Monad (when)
 import NoteData
@@ -89,8 +90,11 @@ strokePath (PenOptions {..}) (Curve c)
 
 renderNoteData :: NoteData -> Render ()
 renderNoteData cs = do
-  -- TODO: filter (overlap box . boundingBox)
-  forM_ cs drawStroke
+  Just (G.Rectangle x y w h) <- G.getClipRectangle
+  let box = Box (Coord (t x) (t y) 1 0) (Coord (t (x+w)) (t (y+h)) 1 0)
+      t = fromIntegral
+      cs' = filter (overlap box . boundingBox) cs
+  forM_ cs' drawStroke
 
 boxRectangle :: Box -> Render ()
 boxRectangle (Box lo hi) =
