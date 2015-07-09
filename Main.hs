@@ -12,8 +12,8 @@ import App
 import Data.IORef
 import Data.Word
 import Event
-import Data.Time.LocalTime
-import System.Locale (defaultTimeLocale)
+import Data.Time.LocalTime 
+-- import System.Locale (defaultTimeLocale)
 import Data.Time.Format
 import System.Mem
 import Control.Concurrent (forkIO)

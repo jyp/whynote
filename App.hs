@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards, FlexibleContexts #-}
 module App where
 import Control.Lens hiding (transform)
 import Control.Monad
