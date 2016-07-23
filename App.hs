@@ -35,6 +35,7 @@ invalidate b0 = do
   liftIO $ do
     Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
 
+mkStroke :: [Coord] -> GtkP Stroke
 mkStroke cs = do
   opts <- use stPen
   return $ Stroke opts (box $ Curve $ V.fromList cs)
@@ -53,6 +54,8 @@ strokeLoop c = do
       _ -> strokeLoop cs'
     _ -> strokeLoop c -- ignore events from another source
 
+-- | Remove 0-pressure subsequences in a stroke.
+cleanStroke :: [Coord] -> [Coord]
 cleanStroke (a:b:c) | coordZ a == 0, coordZ b == 0 = cleanStroke (b:c)
 cleanStroke c = c
 
@@ -94,8 +97,10 @@ lassoProcess source = do
   invalidate $ boundingBox bounds
   return ()
 
+mkSelection :: [Stroke] -> Selection
 mkSelection strks = Selection (extend 10 $ boundingBox strks) strks
 
+addToSelection :: [Stroke] -> GtkP ()
 addToSelection strks = do
   Selection _ s0 <- use stSelection
   let newSel = mkSelection (s0 ++ strks)
@@ -112,6 +117,7 @@ selectNear p = do
 fuzzyFactor :: GtkP Double
 fuzzyFactor = (10 /) <$> use (stTranslation.trZoom)
 
+deleteSelection :: GtkP ()
 deleteSelection = do
   Selection bbox sel <- use stSelection
   stSelection .= emptySelection
@@ -281,7 +287,7 @@ waitForRelease source = do
       Event {eventType  = Event.Release} -> return ()
       Event {eventModifiers = 0} -> return () -- motion without any pressed key
       _ -> waitForRelease source
-  
+
 render r = do
   dw <- view ctxDrawWindow
   liftIO $ Gtk.renderWithDrawWindow dw r
@@ -366,7 +372,7 @@ mainProcess = do
         then if inSel
                 then moveSelWithPen sel eventCoord
                 else do
-                  deselect 
+                  deselect
                   waitForRelease Stylus
         else stroke eventCoord
     Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do

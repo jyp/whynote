@@ -33,7 +33,9 @@ instance AbelianGroup Coord where
   Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2)(t1-t2)
   zero = Coord 0 0 0 0
 
+(.>>) :: (Double -> Double) -> Coord -> Coord
 s .>> (Coord x y z t) = Coord (s x) (s y) (s z) t
+
 s .* v = (s *) .>> v
 
 xy (Coord x y _ _) f  = f x y
@@ -237,7 +239,7 @@ instance FromJSON PenOptions where
   parseJSON = withObject "PenOptions" $ \v ->
     PenOptions <$> ((v .:? "width") .!= 1)
                <*> ((v .:? "color") .!= blackColor)
-               <*> ((v .:? "sensitivity") .!= 1) 
+               <*> ((v .:? "sensitivity") .!= 1)
 
 instance ToJSON PenOptions where
   toJSON (PenOptions w c s) = object ["width" .= w,"color" .= c, "sensitivity" .= s]
@@ -255,7 +257,7 @@ instance ToJSON Stroke where
 
 instance ToJSON Curve where
   toJSON (Curve c) = object ["points" .= c]
-  
+
 instance ToJSON a => ToJSON (Boxed a) where
   toJSON (Boxed _ a) = toJSON a
 

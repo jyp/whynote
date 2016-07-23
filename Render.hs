@@ -37,6 +37,7 @@ drawLasso (Closed c)
 
 setSourceColor :: Color -> Render ()
 setSourceColor (Color r g b a) = Cairo.setSourceRGBA r g b a
+
 drawStroke :: Stroke -> Cairo.Render ()
 drawStroke (Stroke pen (Boxed _ c)) = do
   setSourceColor (_penColor pen)
@@ -106,9 +107,13 @@ type Point = (Double,Double)
 
 menuInnerCircle = 50
 menuOuterCircle = 150
+
 ptDouble (x,y) = (fromIntegral x, fromIntegral y)
+
 renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 menuInnerCircle menuOuterCircle 12 txts
 
+-- | Save excursion
+saveEx :: Render a -> Render a
 saveEx p = do
   save
   x <- p
@@ -123,7 +128,7 @@ renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
       daIn = dx/inner
       daOut = dx/outer
   identityMatrix
-  translate cx cy
+  Cairo.translate cx cy
   actives <- forM (zip3 txts angles (rot angles)) $ \(t,a0,a1) -> do
      newPath
      setSourceRGBA 0 0 0 1
@@ -140,7 +145,7 @@ renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
        setSourceRGBA 0 0 0 1
        stroke
      saveEx $ do
-       rotate ((a0+a1)/2)
+       Cairo.rotate ((a0+a1)/2)
        moveTo (inner+5) 5
        setSourceRGBA 0 0 0 1
        setFontSize 15

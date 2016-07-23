@@ -29,13 +29,13 @@ $(makeLenses ''Ctx)
 $(makeLenses ''Translation)
 
 
-data St = 
-  St { _stRender :: Render ()
-     , _stNoteData :: NoteData
-     , _stRedo :: [Stroke]
-     , _stSelection :: Selection
-     , _stTranslation :: Translation
-     , _stPen :: PenOptions
+data St =
+  St { _stRender      :: Render ()
+     , _stNoteData    :: NoteData
+     , _stRedo        :: [Stroke]
+     , _stSelection   :: Selection
+     , _stTranslation :: Translation -- currently applied transformation of the logical canvas
+     , _stPen         :: PenOptions -- current pen
      }
 
 $(makeLenses ''St)
