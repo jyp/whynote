@@ -4,8 +4,8 @@ module Render where
 import qualified Prelude as P
 import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
+import Graphics.Rendering.Cairo.Matrix
 import qualified Graphics.UI.Gtk as G
-import Event
 import Control.Monad (when)
 import NoteData
 import qualified Data.Vector as V
@@ -13,6 +13,26 @@ import Data.Traversable
 import Data.Foldable
 import Data.List (findIndex)
 
+-- | For debugging multitouch events.
+renderFinger :: Finger -> Render ()
+renderFinger Finger {fingerStart = Coord _ _ _ t0
+                    ,fingerCurrent = Coord x y _z t1} = do
+  if t1 - t0 > 400
+    then Cairo.setSourceRGBA 0 0 0 0.7
+    else Cairo.setSourceRGBA 1 0 0 0.7
+  setLineWidth 5
+  moveTo x y
+  arc x y 80 pi 0
+  Cairo.stroke
+
+
+makeTranslationMatrix :: Translation -> Matrix
+makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
+
+
+resetMatrix = setMatrix . makeTranslationMatrix
+
+{-
 drawEv :: Event -> Render ()
 drawEv ev@Event{eventCoord = Coord x y z t} = do
     setSourceRGB 0 0 0
@@ -20,7 +40,9 @@ drawEv ev@Event{eventCoord = Coord x y z t} = do
     moveTo x y
     arc x y (2 * z) 0 3
     stroke
+-}
 
+-- | Draw the lasso for a given curve
 drawLasso :: ClosedCurve -> Cairo.Render ()
 drawLasso (Closed c)
   | V.null c = return ()
@@ -53,7 +75,7 @@ drawStrokeSelected (Stroke opts (Boxed _ c)) = do
   -- strokePreserve
   Cairo.setSourceRGBA 1 1 1 1
   Cairo.setFillRule Cairo.FillRuleWinding
-  Cairo.fill  
+  Cairo.fill
 
 strokePath :: PenOptions -> Curve -> Cairo.Render ()
 strokePath (PenOptions {..}) (Curve c)
@@ -100,7 +122,7 @@ renderNoteData cs = do
 boxRectangle :: Box -> Render ()
 boxRectangle (Box lo hi) =
   lo `xy` \lx ly ->
-  (hi-lo) `xy` 
+  (hi-lo) `xy`
   rectangle lx ly
 
 type Point = (Double,Double)
@@ -165,4 +187,3 @@ renderSelection (Selection bbox cs) = do
   fill
   restore
   forM_ cs drawStrokeSelected
-
