@@ -11,12 +11,19 @@ import qualified Data.Vector as V
 
 data Coord = Coord { coordX :: !Double
                    , coordY :: !Double
-                   , coordZ :: !Double
+                   , coordZ :: !Double -- pressure
                    , coordT :: !Word32
                    }
            deriving (Show,Eq,Ord)
 
+data Finger = Finger {fingerStart :: Coord,
+                      fingerCurrent :: Coord}
+
+
+blackColor :: Color
 blackColor = Color 0 0 0 1
+
+defaultPen :: PenOptions
 defaultPen = PenOptions 1 blackColor 1
 
 data Color = Color !Double !Double !Double !Double
