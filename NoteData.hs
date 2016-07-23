@@ -213,6 +213,8 @@ minCoord = opCoord min
 maxCoord = opCoord max
 
 intersectBox (Box l1 h1) (Box l2 h2) = Box (max l1 l2) (min h1 h2)
+unionBox (Box l1 h1) (Box l2 h2) = Box (min l1 l2) (max h1 h2)
+pointBox x = Box x x
 
 nilBox (Box (Coord x0 y0 _ _) (Coord x1 y1 _ _)) = (x0 >= x1) || (y0 >= y1)
 
