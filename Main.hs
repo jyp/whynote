@@ -12,7 +12,7 @@ import App
 import Data.IORef
 import Data.Word
 import Event
-import Data.Time.LocalTime 
+import Data.Time.LocalTime
 -- import System.Locale (defaultTimeLocale)
 import Data.Time.Format
 import System.Mem
@@ -58,25 +58,22 @@ main = do
            Wait st msg _ -> renderWithDrawWindow drawin $ renderAll st msg
            _ -> return ()
 
+     let debugState = do
+           cont <- readIORef continuation
+           putStrLn $ "Current state: " ++ show cont
+
      on canvas keyPressEvent $ liftIO $ do
-       cont <- readIORef continuation
-       putStrLn $ "Current state: " ++ show cont
+       debugState
        return False
 
      nextSaveTime <- newIORef (0 :: TimeStamp)
-     lastStylusTime <- newIORef (0 :: TimeStamp)
      let handleEvent :: EventM t Bool
          handleEvent = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
              let t = coordT . eventCoord $ ev'
-             -- Touch rejection when stylus/eraser is active
-             when (eventSource ev' `elem` [Stylus,Eraser]) $ do
-               writeIORef lastStylusTime t
-             time0 <- readIORef lastStylusTime
-             unless (eventSource ev' `elem` [Touch,MultiTouch]
-                     && t - time0 < 150) $ do
+             do
                oldState <- readIORef continuation
                case oldState of
                  Done s -> do
