@@ -1,8 +1,13 @@
 
+* infrastructure
+pre-filterer for touch events (this should also unify mouse, single touch and mutli touch events)
 
 * features
 ** show menu when selection is active (to delete selection)
 ** allow activation of menu by touch
 ** show menu on the bottom right
+should contain functions such as erase, select, etc.
 ** selection of text by touch
+if some option in the menu is active, then instead of panning/zooming
+one could 
 
