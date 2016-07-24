@@ -1,0 +1,8 @@
+
+
+* features
+** show menu when selection is active (to delete selection)
+** allow activation of menu by touch
+** show menu on the bottom right
+** selection of text by touch
+
