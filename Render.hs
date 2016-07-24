@@ -130,8 +130,16 @@ type Point = (Double,Double)
 menuInnerCircle = 50
 menuOuterCircle = 150
 
+ptDouble :: (Int,Int) -> Point
 ptDouble (x,y) = (fromIntegral x, fromIntegral y)
 
+-- | Render a menu, and return the selected option.
+-- @renderMenu doRender (x,y) (cx,cy) txts@
+--  - doRender: render the menu, or just return the selected option?
+--  - (x,y): the position of the cursor (determines which option is selected)
+--  - (cx,cy): center of the dial
+--  - txts: options to render (by text)
+renderMenu :: Bool -> (Int,Int) -> (Int,Int) -> [String] -> Render (Maybe Int)
 renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 menuInnerCircle menuOuterCircle 12 txts
 
 -- | Save excursion
@@ -142,6 +150,16 @@ saveEx p = do
   restore
   return x
 
+-- TODO: use a record for these options.
+-- | Render a menu dial, and return the selected option.
+-- @renderDial doRender (x,y) (cx,cy) dx inner outer n txts@
+--  - doRender: render the menu, or just return the selected option?
+--  - (x,y): the position of the cursor (determines which option is selected)
+--  - (cx,cy): center of the dial
+--  - dx: distance between the options
+--  - inner,outer : inner and outer radiuses
+--  - n: nominal number of options (determines the size and placement of the options)
+--  - txts: options to render (by text)
 renderDial :: Bool -> Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
 renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
   let angles :: [Double]
@@ -173,7 +191,6 @@ renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
        setFontSize 15
        when doRender $ showText t
      return active
-  -- liftIO $ print active
   return $ findIndex id actives
 
 renderSelection :: Selection -> Render ()
