@@ -35,9 +35,13 @@ data PenOptions =
   ,_penColor :: Color
   ,_penSensitivity :: Double -- in range [0,1]
   }
-instance AbelianGroup Coord where
-  Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2)(t1+t2)
-  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2)(t1-t2)
+
+instance Group Coord where
+  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
+
+instance AbelianAdditive Coord where
+instance Additive Coord where
+  Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2) (t1+t2)
   zero = Coord 0 0 0 0
 
 (.>>) :: (Double -> Double) -> Coord -> Coord
@@ -99,7 +103,7 @@ instance Area Box where
   nearArea d p b = inArea p (extend d b)
 
 overlap :: Box -> Box -> Bool
-overlap (Box l1 h1) (Box l2 h2) = 
+overlap (Box l1 h1) (Box l2 h2) =
     l1 `xy` \lx1 ly1 ->
     l2 `xy` \lx2 ly2 ->
     h1 `xy` \hx1 hy1 ->

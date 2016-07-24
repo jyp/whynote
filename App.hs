@@ -173,12 +173,13 @@ deSelectProcess source = do
   neighbourhoodProcessLoop source deselectNear
   return ()
 
-add cord Nothing = Just (cord,cord)
-add cord (Just (c0,_)) = Just (c0,cord)
+fingerBegin coord = Finger {fingerStart = coord, fingerCurrent = coord}
+fingerAdd coord Nothing = Just (fingerBegin coord)
+fingerAdd coord (Just Finger{..}) = Just Finger {fingerCurrent=coord,..}
 
 avg x y = average [x,y]
 average xs = ((1/fromIntegral (length xs)) *) .>> foldr (+) zero xs
--- 
+
 norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
 peri xs = sum $ zipWith dist xs (rot xs)
@@ -187,11 +188,15 @@ eventTime = coordT . eventCoord
 
 touchProcessEntry :: Selection -> Translation -> Event -> GtkP ()
 touchProcessEntry sel origTrans ev =
-  touchProcess sel origTrans $ M.singleton (eventButton ev) (eventCoord ev,eventCoord ev)
+  touchProcess sel origTrans $ M.singleton (eventButton ev) (fingerBegin (eventCoord ev))
 
-oldEnough (ev0,ev) = coordT ev - coordT ev0 > 100
+oldEnough :: Finger -> Bool
+oldEnough Finger{..} = coordT fingerCurrent - coordT fingerStart > 100
 
-touchProcess :: Selection -> Translation -> M.Map Int (Coord,Coord) -> GtkP ()
+debugTouch :: Bool
+debugTouch = False
+
+touchProcess :: Selection -> Translation -> M.Map Int Finger -> GtkP ()
 touchProcess selection origTrans touches
   | M.null touches = return ()
   | otherwise = do
@@ -200,50 +205,65 @@ touchProcess selection origTrans touches
   --   putStrLn "touches"
   --   forM_ (M.assocs touches) print
   ev <- waitInTrans origTrans "multi-touch"
-  let rb = rollback ev origTrans
+  let rb = rollback ev origTrans >> exit
+      exit = when debugTouch $ do
+        stRender .= return ()
+        inv touches
+      inv ts =
+        when (not (null ts)) $ do
+          invalidate $ foldr1 unionBox $ map (extend 50 . pointBox . fingerCurrent) $ M.elems ts
   case eventSource ev of
     MultiTouch -> case () of
       _ | eventType ev `elem` [Cancel,End]
-          -> return ()
-             -- touchProcess selection origTrans $ M.delete (eventButton ev) touches
-             -- If we do this, then releasing 1 finger has the effect of canceling the multi-touch operation
+          -> do case M.lookup (eventButton ev) touches of
+                  Nothing -> cont touches
+                  Just f -> if oldEnough f
+                            then exit -- a 'real' touch is being let go; stop the multi-touch operation.
+                            else cont $ M.delete (eventButton ev) touches
       _ | eventType ev `elem` [Begin,Update]
-          -> do let touches' = M.alter (add (eventCoord ev)) (eventButton ev) touches
+          -> do let touches' = M.alter (fingerAdd (eventCoord ev)) (eventButton ev) touches
                     pss = filter oldEnough $ M.elems touches'
-                    (ps0,ps1) = unzip pss
+                    ps0 = map fingerStart pss
+                    ps1 = map fingerCurrent pss
                     s0 = peri ps0
                     s1 = peri ps1
                     factor = (s1 / (s0+1))
                     a0 = average ps0
                     a1 = average ps1
                     inSel = any (`inArea` selection) ps0
+                -- debug
+                inv touches
+                when debugTouch $ stRender .= do
+                  resetMatrix origTrans -- because the touch coordinates are in that matrix.
+                  forM_ (M.elems touches') renderFinger
+                inv touches'
                 case (length pss,inSel) of
                   (1,True) -> transSel selection a0 a1 1
                   (2,True) -> transSel selection a0 a1 factor
-                  (2,False) -> transSheet origTrans a0 a1 1
-                  (3,False) -> transSheet origTrans a0 a1 factor
-                  _ -> return ()
+                  (1,False) -> transSheet origTrans a0 a1 1
+                  (n,False) | n > 1 -> transSheet origTrans a0 a1 factor
+                  _ -> exit
                 cont touches'
       _ -> cont touches
     Stylus -> rb
     Eraser -> rb
-    _ -> cont touches
+    _ -> do liftIO $ putStrLn $ "event from" ++ show (eventSource ev)
+            cont touches
 
-
+-- | Translate and zoom the whole sheet by the given amount.
+transSheet :: Translation -> Coord -> Coord -> Double -> GtkP ()
 transSheet origTrans a0 a1 factor = do
   let Translation z0 dx0 dy0 = origTrans
-  let d = a1 - a0
-      (dx,dy) = xy d (,)
-      z1 = max 0.1 (z0*factor)
+  let z1 = max 0.1 (z0*factor)
       (a0x,a0y) = xy a0 (,)
       (a1x,a1y) = xy a1 (,)
   stTranslation .= Translation z1 (dx0 + z0 * a1x - z1 * a0x) (dy0 + z0 * a1y - z1 * a0y)
   invalidateAll
 
+-- | Translate and zoom the selection by the given amount.
+transSel :: Selection -> Coord -> Coord -> Double -> GtkP ()
 transSel origSel a0 a1 factor = do
-  -- liftIO $ print (a0,a1,factor)
-  let -- a0 * factor + d = a1
-      (dx,dy) = xy (a1 - factor .* a0) (,)
+  let (dx,dy) = xy (a1 - factor .* a0) (,)
   stSelection .= transform (Translation factor dx dy) origSel
   invalidateAll -- optim. possible
 
@@ -317,6 +337,7 @@ menu options c = do
   c' <- screenCoords c
   menu' c' c' options
 
+menu' :: (Int, Int) -> (Int, Int) -> [(String, Coord -> GtkP ())] -> GtkP ()
 menu' p c options = do
   let hideMenu = do stRender .= return (); invalidateAll; return ()
   if distC p c (round menuOuterCircle)
@@ -382,7 +403,7 @@ mainProcess = do
                   deleteSelection
                   waitForRelease Eraser
                 else do
-                  deselect 
+                  deselect
                   waitForRelease Eraser
         else do
           eraseNear (eventCoord)
@@ -403,4 +424,3 @@ mainProcess = do
         simpleTouchProcess tr eventCoord
     _ -> return ()
   mainProcess
-

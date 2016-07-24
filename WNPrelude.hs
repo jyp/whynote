@@ -1,20 +1,12 @@
 module WNPrelude
        (module Control.Applicative,
-        module Prelude.YAP,
-        module Data.YAP.Algebra,
-        module Data.Foldable
+        module Algebra.Classes,
+        module Data.Foldable,
+        module P
         )
        where
 
-import Prelude.YAP hiding (foldr)
+import Algebra.Classes
 import Control.Applicative
-import Data.YAP.Algebra
-import Data.Word
 import Data.Foldable (foldr,toList)
-
-import qualified Prelude as P
-
-instance AbelianGroup Word32 where
-  zero = 0
-  (+) = (P.+)
-  (-) = (P.-)
+import Prelude as P hiding (Integral(..),Num(..),gcd,Fractional(..),(^))

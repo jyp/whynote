@@ -2,7 +2,7 @@ with (import <nixpkgs> {}).pkgs;
 let pkg = haskellPackages.callPackage
             ({ mkDerivation, aeson, base, bytestring, cairo, configurator
              , containers, glib, gtk3, lens, mtl, old-locale, stdenv, time
-             , transformers, unordered-containers, vector, yap
+             , transformers, unordered-containers, vector, gasp
              }:
              mkDerivation {
                pname = "whynote";
@@ -12,7 +12,7 @@ let pkg = haskellPackages.callPackage
                isExecutable = true;
                buildDepends = [
                  aeson base bytestring cairo configurator containers glib gtk3 lens
-                 mtl old-locale time transformers unordered-containers vector yap
+                 mtl old-locale time transformers unordered-containers vector gasp
                ];
                description = "A minimal note-taking program";
                license = stdenv.lib.licenses.gpl3;

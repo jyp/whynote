@@ -22,7 +22,7 @@ executable whynote
   build-depends: lens
   build-depends: aeson >= 0.7
   build-depends: containers >= 0.5
-  build-depends: yap >= 0.1
+  build-depends: gasp
   build-depends: time >= 1.4
   build-depends: bytestring >= 0.10
   build-depends: vector >= 0.10
