@@ -178,7 +178,8 @@ fingerAdd coord Nothing = Just (fingerBegin coord)
 fingerAdd coord (Just Finger{..}) = Just Finger {fingerCurrent=coord,..}
 
 avg x y = average [x,y]
-average xs = ((1/fromIntegral (length xs)) *) .>> foldr (+) zero xs
+average :: [Coord] -> Coord
+average xs = scale (1/fromIntegral (length xs)) (foldr (+) zero xs)
 
 norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
@@ -263,8 +264,8 @@ transSheet origTrans a0 a1 factor = do
 -- | Translate and zoom the selection by the given amount.
 transSel :: Selection -> Coord -> Coord -> Double -> GtkP ()
 transSel origSel a0 a1 factor = do
-  let (dx,dy) = xy (a1 - factor .* a0) (,)
-  stSelection .= transform (Translation factor dx dy) origSel
+  let (Coord dx dy _ _) = a1 - scale factor a0
+  stSelection .= fmap (translation factor dx dy) origSel
   invalidateAll -- optim. possible
 
 simpleTouchProcess :: Translation -> Coord -> GtkP ()

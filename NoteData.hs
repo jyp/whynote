@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, DeriveFunctor, OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
@@ -44,17 +44,20 @@ instance Additive Coord where
   Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2) (t1+t2)
   zero = Coord 0 0 0 0
 
-(.>>) :: (Double -> Double) -> Coord -> Coord
-s .>> (Coord x y z t) = Coord (s x) (s y) (s z) t
-
-s .* v = (s *) .>> v
+scale :: Double -> Coord -> Coord
+scale f = \(Coord x y z t) -> Coord (s x) (s y) (s z) t
+ where s = (f *)
 
 xy (Coord x y _ _) f  = f x y
 
-data Selection = Selection Box [Stroke]
+data Selection' a = Selection (Interval a) [Stroke' a]
+  deriving Functor
+type Selection = Selection' Coord
 instance Area Selection where
   inArea p (Selection b _) = inArea p b
   nearArea d p (Selection b _) = nearArea d p b
+
+emptySelection :: Additive a => Selection' a
 emptySelection = Selection (Box zero zero) []
 isEmptySetection (Selection _ xs) = null xs
 instance HasBox Selection where
@@ -62,19 +65,20 @@ instance HasBox Selection where
 ------------------
 -- Boxes
 
-data Boxed x = Boxed Box x
+data Boxed' f a = Boxed (Interval a) (f a) deriving Functor
+type Boxed f = Boxed' f Coord
 
-box :: HasBox x => x -> Boxed x
 box x = Boxed (boundingBox x) x
 
 extend :: Double -> Box -> Box
 extend d (Box p1 p2) = Box (p1-x)(p2+x)
   where x = Coord d d 0 0
 
+-- TODO? : replace by Foldable ?
 class HasBox a where
   boundingBox :: a -> Box
 
-instance HasBox (Boxed x) where
+instance HasBox (Boxed' x Coord) where
   boundingBox (Boxed b _) = b
 
 instance HasBox Box where
@@ -93,7 +97,7 @@ class Area a where
   inArea :: Coord -> a -> Bool
   nearArea :: Double -> Coord -> a -> Bool
 
-instance Area a => Area (Boxed a) where
+instance Area (a Coord) => Area (Boxed a) where
   inArea p (Boxed b a) = inArea p b && inArea p a
   nearArea d p (Boxed b a) = nearArea d p b && nearArea d p a
 
@@ -102,51 +106,29 @@ instance Area Box where
     p1 `xy` \x1 y1 -> p2 `xy` \x2 y2 -> x1 <= x && x <= x2 && y1 <= y && y <= y2
   nearArea d p b = inArea p (extend d b)
 
-overlap :: Box -> Box -> Bool
-overlap (Box l1 h1) (Box l2 h2) =
-    l1 `xy` \lx1 ly1 ->
-    l2 `xy` \lx2 ly2 ->
-    h1 `xy` \hx1 hy1 ->
-    h2 `xy` \hx2 hy2 ->
-    (lx2 <= hx1 && ly2 <= hy1) || (lx1 <= hx2 && ly1 <= hy2)
-
 data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 
 class TwoD a where
   transform :: Translation -> a -> a
 
-instance TwoD Coord where
-  transform (Translation zz dx dy) (Coord x y z t) = Coord (x * zz + dx) (y * zz + dy) (z * zz) t
+translation :: Double -> Double -> Double -> Coord -> Coord
+translation zz dx dy (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) (z*zz) t
+-- instance (TwoD a, TwoD b) => TwoD (a,b) where
+--   transform tr (a,b) = (transform tr a, transform tr b)
 
-instance TwoD Box where
-  transform tr (Box p1 p2) = Box (transform tr p1) (transform tr p2)
-
-instance (TwoD a, TwoD b) => TwoD (a,b) where
-  transform tr (a,b) = (transform tr a, transform tr b)
-
-instance TwoD Selection where
-  transform tr (Selection b a) = Selection (transform tr b) (transform tr a)
-instance TwoD a => TwoD [a] where
-  transform tr = map (transform tr)
-
-instance TwoD a => TwoD (V.Vector a) where
-  transform tr = fmap (transform tr)
-
-instance TwoD a => TwoD (Boxed a) where
-  transform tr (Boxed b a) = Boxed (transform tr b) (transform tr a)
-
-data Box = Box Coord Coord
-newtype Curve = Curve (V.Vector Coord)
-  deriving (HasBox, TwoD)
-newtype ClosedCurve = Closed (V.Vector Coord)
-  deriving (HasBox, TwoD)
-data Stroke = Stroke PenOptions (Boxed Curve)
+data Interval a = Box a a deriving Functor
+type Box = Interval Coord
+newtype Curve' a = Curve (V.Vector a)
+  deriving (Functor,HasBox)
+type Curve = Curve' Coord
+newtype ClosedCurve' a = Closed (V.Vector a)
+  deriving (Functor,HasBox)
+type ClosedCurve = ClosedCurve' Coord
+data Stroke' a = Stroke PenOptions (Boxed' Curve' a)
+  deriving Functor
+type Stroke = Stroke' Coord
 instance HasBox Stroke where
   boundingBox (Stroke PenOptions {_penWidth} x) = extend _penWidth $ boundingBox x
-instance TwoD Stroke where
-  transform tr (Stroke pen x) = Stroke (transform tr pen)  (transform tr x)
-instance TwoD PenOptions where
-  transform (Translation zz _ _) (PenOptions {..}) = PenOptions {_penWidth = _penWidth * zz,..}
 instance Area Stroke where
   inArea p (Stroke _ x) = inArea p x
   nearArea d p (Stroke _ x) = nearArea d p x
@@ -206,7 +188,7 @@ instance Area Curve where
   inArea _ _ = False
   nearArea d p (Curve ps) = V.any (nearArea d p) ps
 
-lassoPartitionStrokes :: Boxed ClosedCurve -> [Stroke] -> ([Stroke],[Stroke])
+lassoPartitionStrokes :: Boxed ClosedCurve' -> [Stroke] -> ([Stroke],[Stroke])
 lassoPartitionStrokes strk = partition (`strokeInArea` strk)
 
 instance Area Coord where
@@ -223,6 +205,13 @@ opCoord op (Coord x1 y1 z1 t1) (Coord x2 y2 z2 t2) = Coord (op x1 x2) (op y1 y2)
 minCoord = opCoord min
 maxCoord = opCoord max
 
+overlap :: Box -> Box -> Bool
+overlap (Box l1 h1) (Box l2 h2) =
+    l1 `xy` \lx1 ly1 ->
+    l2 `xy` \lx2 ly2 ->
+    h1 `xy` \hx1 hy1 ->
+    h2 `xy` \hx2 hy2 ->
+    (lx2 <= hx1 && ly2 <= hy1) || (lx1 <= hx2 && ly1 <= hy2)
 intersectBox (Box l1 h1) (Box l2 h2) = Box (max l1 l2) (min h1 h2)
 unionBox (Box l1 h1) (Box l2 h2) = Box (min l1 l2) (max h1 h2)
 pointBox x = Box x x
@@ -271,8 +260,8 @@ instance ToJSON Stroke where
 instance ToJSON Curve where
   toJSON (Curve c) = object ["points" .= c]
 
-instance ToJSON a => ToJSON (Boxed a) where
+instance ToJSON (f a) => ToJSON (Boxed' f a) where
   toJSON (Boxed _ a) = toJSON a
 
-instance (FromJSON a, HasBox a) => FromJSON (Boxed a) where
+instance (FromJSON (f Coord), HasBox (f Coord)) => FromJSON (Boxed f) where
   parseJSON x = box <$> parseJSON x
