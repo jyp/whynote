@@ -8,7 +8,6 @@ import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
 import Graphics.Rendering.Cairo
-import Graphics.Rendering.Cairo.Matrix
 import qualified Graphics.UI.Gtk as Gtk
 
 import Process hiding (wait)
@@ -29,13 +28,13 @@ $(makeLenses ''Ctx)
 $(makeLenses ''Translation)
 
 
-data St = 
-  St { _stRender :: Render ()
-     , _stNoteData :: NoteData
-     , _stRedo :: [Stroke]
-     , _stSelection :: Selection
-     , _stTranslation :: Translation
-     , _stPen :: PenOptions
+data St =
+  St { _stRender      :: Render ()
+     , _stNoteData    :: NoteData
+     , _stRedo        :: [Stroke]
+     , _stSelection   :: Selection
+     , _stTranslation :: Translation -- currently applied transformation of the logical canvas
+     , _stPen         :: PenOptions -- current pen
      }
 
 $(makeLenses ''St)
@@ -56,9 +55,6 @@ newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
 runGtkP :: Ctx -> St -> GtkP a -> Process St Event
 runGtkP ctx st (GtkP p) = run st (runReaderT p ctx)
 
-makeTranslationMatrix :: Translation -> Matrix
-makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
-
 -- apply the above matrix
 screenCoords :: Coord -> GtkP (Int,Int)
 screenCoords (Coord x y _ _) = do
@@ -75,7 +71,7 @@ translateEvent (Translation z dx dy) Event {eventCoord = Coord{..},..} = Event{.
 --   where tx a = dx + f*fromIntegral a
 --         ty a = dy + f*fromIntegral a
 --         f = 1/z
-  
+
 quit :: GtkP ()
 quit = do
   GtkP $ lift $ P $ \_k s -> Done s
@@ -89,7 +85,7 @@ wait msg = do
 renderAll St{..} msg = do
    -- moveTo 0 10
    -- showText $ msg
-   setMatrix $ makeTranslationMatrix _stTranslation
+   resetMatrix  _stTranslation
    renderNoteData _stNoteData
    renderSelection _stSelection
    _stRender
@@ -101,4 +97,3 @@ loadState :: String -> IO NoteData
 loadState fname = do
   NoteFile s <- readNote fname
   return s
-

@@ -11,12 +11,19 @@ import qualified Data.Vector as V
 
 data Coord = Coord { coordX :: !Double
                    , coordY :: !Double
-                   , coordZ :: !Double
+                   , coordZ :: !Double -- pressure
                    , coordT :: !Word32
                    }
            deriving (Show,Eq,Ord)
 
+data Finger = Finger {fingerStart :: Coord,
+                      fingerCurrent :: Coord}
+
+
+blackColor :: Color
 blackColor = Color 0 0 0 1
+
+defaultPen :: PenOptions
 defaultPen = PenOptions 1 blackColor 1
 
 data Color = Color !Double !Double !Double !Double
@@ -28,12 +35,18 @@ data PenOptions =
   ,_penColor :: Color
   ,_penSensitivity :: Double -- in range [0,1]
   }
-instance AbelianGroup Coord where
-  Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2)(t1+t2)
-  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2)(t1-t2)
+
+instance Group Coord where
+  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
+
+instance AbelianAdditive Coord where
+instance Additive Coord where
+  Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2) (t1+t2)
   zero = Coord 0 0 0 0
 
+(.>>) :: (Double -> Double) -> Coord -> Coord
 s .>> (Coord x y z t) = Coord (s x) (s y) (s z) t
+
 s .* v = (s *) .>> v
 
 xy (Coord x y _ _) f  = f x y
@@ -90,7 +103,7 @@ instance Area Box where
   nearArea d p b = inArea p (extend d b)
 
 overlap :: Box -> Box -> Bool
-overlap (Box l1 h1) (Box l2 h2) = 
+overlap (Box l1 h1) (Box l2 h2) =
     l1 `xy` \lx1 ly1 ->
     l2 `xy` \lx2 ly2 ->
     h1 `xy` \hx1 hy1 ->
@@ -211,6 +224,8 @@ minCoord = opCoord min
 maxCoord = opCoord max
 
 intersectBox (Box l1 h1) (Box l2 h2) = Box (max l1 l2) (min h1 h2)
+unionBox (Box l1 h1) (Box l2 h2) = Box (min l1 l2) (max h1 h2)
+pointBox x = Box x x
 
 nilBox (Box (Coord x0 y0 _ _) (Coord x1 y1 _ _)) = (x0 >= x1) || (y0 >= y1)
 
@@ -237,7 +252,7 @@ instance FromJSON PenOptions where
   parseJSON = withObject "PenOptions" $ \v ->
     PenOptions <$> ((v .:? "width") .!= 1)
                <*> ((v .:? "color") .!= blackColor)
-               <*> ((v .:? "sensitivity") .!= 1) 
+               <*> ((v .:? "sensitivity") .!= 1)
 
 instance ToJSON PenOptions where
   toJSON (PenOptions w c s) = object ["width" .= w,"color" .= c, "sensitivity" .= s]
@@ -255,7 +270,7 @@ instance ToJSON Stroke where
 
 instance ToJSON Curve where
   toJSON (Curve c) = object ["points" .= c]
-  
+
 instance ToJSON a => ToJSON (Boxed a) where
   toJSON (Boxed _ a) = toJSON a
 

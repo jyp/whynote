@@ -4,8 +4,8 @@ module Render where
 import qualified Prelude as P
 import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
+import Graphics.Rendering.Cairo.Matrix
 import qualified Graphics.UI.Gtk as G
-import Event
 import Control.Monad (when)
 import NoteData
 import qualified Data.Vector as V
@@ -13,6 +13,26 @@ import Data.Traversable
 import Data.Foldable
 import Data.List (findIndex)
 
+-- | For debugging multitouch events.
+renderFinger :: Finger -> Render ()
+renderFinger Finger {fingerStart = Coord _ _ _ t0
+                    ,fingerCurrent = Coord x y _z t1} = do
+  if t1 - t0 > 400
+    then Cairo.setSourceRGBA 0 0 0 0.7
+    else Cairo.setSourceRGBA 1 0 0 0.7
+  setLineWidth 5
+  moveTo x y
+  arc x y 80 pi 0
+  Cairo.stroke
+
+
+makeTranslationMatrix :: Translation -> Matrix
+makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
+
+
+resetMatrix = setMatrix . makeTranslationMatrix
+
+{-
 drawEv :: Event -> Render ()
 drawEv ev@Event{eventCoord = Coord x y z t} = do
     setSourceRGB 0 0 0
@@ -20,7 +40,9 @@ drawEv ev@Event{eventCoord = Coord x y z t} = do
     moveTo x y
     arc x y (2 * z) 0 3
     stroke
+-}
 
+-- | Draw the lasso for a given curve
 drawLasso :: ClosedCurve -> Cairo.Render ()
 drawLasso (Closed c)
   | V.null c = return ()
@@ -37,6 +59,7 @@ drawLasso (Closed c)
 
 setSourceColor :: Color -> Render ()
 setSourceColor (Color r g b a) = Cairo.setSourceRGBA r g b a
+
 drawStroke :: Stroke -> Cairo.Render ()
 drawStroke (Stroke pen (Boxed _ c)) = do
   setSourceColor (_penColor pen)
@@ -52,7 +75,7 @@ drawStrokeSelected (Stroke opts (Boxed _ c)) = do
   -- strokePreserve
   Cairo.setSourceRGBA 1 1 1 1
   Cairo.setFillRule Cairo.FillRuleWinding
-  Cairo.fill  
+  Cairo.fill
 
 strokePath :: PenOptions -> Curve -> Cairo.Render ()
 strokePath (PenOptions {..}) (Curve c)
@@ -99,22 +122,44 @@ renderNoteData cs = do
 boxRectangle :: Box -> Render ()
 boxRectangle (Box lo hi) =
   lo `xy` \lx ly ->
-  (hi-lo) `xy` 
+  (hi-lo) `xy`
   rectangle lx ly
 
 type Point = (Double,Double)
 
 menuInnerCircle = 50
 menuOuterCircle = 150
+
+ptDouble :: (Int,Int) -> Point
 ptDouble (x,y) = (fromIntegral x, fromIntegral y)
+
+-- | Render a menu, and return the selected option.
+-- @renderMenu doRender (x,y) (cx,cy) txts@
+--  - doRender: render the menu, or just return the selected option?
+--  - (x,y): the position of the cursor (determines which option is selected)
+--  - (cx,cy): center of the dial
+--  - txts: options to render (by text)
+renderMenu :: Bool -> (Int,Int) -> (Int,Int) -> [String] -> Render (Maybe Int)
 renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 menuInnerCircle menuOuterCircle 12 txts
 
+-- | Save excursion
+saveEx :: Render a -> Render a
 saveEx p = do
   save
   x <- p
   restore
   return x
 
+-- TODO: use a record for these options.
+-- | Render a menu dial, and return the selected option.
+-- @renderDial doRender (x,y) (cx,cy) dx inner outer n txts@
+--  - doRender: render the menu, or just return the selected option?
+--  - (x,y): the position of the cursor (determines which option is selected)
+--  - (cx,cy): center of the dial
+--  - dx: distance between the options
+--  - inner,outer : inner and outer radiuses
+--  - n: nominal number of options (determines the size and placement of the options)
+--  - txts: options to render (by text)
 renderDial :: Bool -> Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
 renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
   let angles :: [Double]
@@ -123,7 +168,7 @@ renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
       daIn = dx/inner
       daOut = dx/outer
   identityMatrix
-  translate cx cy
+  Cairo.translate cx cy
   actives <- forM (zip3 txts angles (rot angles)) $ \(t,a0,a1) -> do
      newPath
      setSourceRGBA 0 0 0 1
@@ -140,13 +185,12 @@ renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
        setSourceRGBA 0 0 0 1
        stroke
      saveEx $ do
-       rotate ((a0+a1)/2)
+       Cairo.rotate ((a0+a1)/2)
        moveTo (inner+5) 5
        setSourceRGBA 0 0 0 1
        setFontSize 15
        when doRender $ showText t
      return active
-  -- liftIO $ print active
   return $ findIndex id actives
 
 renderSelection :: Selection -> Render ()
@@ -160,4 +204,3 @@ renderSelection (Selection bbox cs) = do
   fill
   restore
   forM_ cs drawStrokeSelected
-
