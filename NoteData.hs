@@ -68,6 +68,7 @@ instance HasBox Selection where
 data Boxed' f a = Boxed (Interval a) (f a) deriving Functor
 type Boxed f = Boxed' f Coord
 
+box :: HasBox (f Coord) => f Coord -> Boxed' f Coord
 box x = Boxed (boundingBox x) x
 
 extend :: Double -> Box -> Box
@@ -108,13 +109,8 @@ instance Area Box where
 
 data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 
-class TwoD a where
-  transform :: Translation -> a -> a
-
 translation :: Double -> Double -> Double -> Coord -> Coord
 translation zz dx dy (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) (z*zz) t
--- instance (TwoD a, TwoD b) => TwoD (a,b) where
---   transform tr (a,b) = (transform tr a, transform tr b)
 
 data Interval a = Box a a deriving Functor
 type Box = Interval Coord

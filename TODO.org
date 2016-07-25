@@ -9,5 +9,7 @@ pre-filterer for touch events (this should also unify mouse, single touch and mu
 should contain functions such as erase, select, etc.
 ** selection of text by touch
 if some option in the menu is active, then instead of panning/zooming
-one could 
+one could
+** quadtree
+** curve optimisation
 
