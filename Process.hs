@@ -4,21 +4,20 @@ module Process where
 import Control.Monad.IO.Class
 import Control.Monad.Reader
 import Control.Monad.State
-import Control.Applicative
 
 class Monad m => MonadProcess e m | m -> e where
   wait :: String -> m e
   pushBack :: e -> m ()
 
 data Process s e where
-  Wait :: s -> String -> (s -> e -> Process s e) -> Process s e
+  Wait :: s -> String -> (e -> Process s e) -> Process s e
   Do :: IO a -> (a -> Process s e) -> Process s e
   Done :: s -> Process s e
 
 pushBackInternal :: e -> Process s e -> Process s e
 pushBackInternal e k0 = case k0 of
   Done s -> Done s
-  Wait s _ k -> k s e
+  Wait _ _ k -> k e
   Do act k -> Do act (\a -> pushBackInternal e (k a))
 
 instance Show (Process s e) where
@@ -26,24 +25,27 @@ instance Show (Process s e) where
   show (Do _ _) = "<DO>"
   show (Wait _ s _) = "<WAIT " ++ s ++ ">"
 
-newtype P s e x = P {fromP :: (x -> s -> Process s e) -> s -> Process s e}
+-- unfortunately we cannot use the continuation monad from mtl... because of its
+-- using transformers.
+newtype Cont r x = P {fromP :: (x -> r) -> r}
+type P s e = Cont (s -> Process s e)
 
 instance MonadIO (P s e) where
   liftIO x = P (\k s -> Do x (flip k s))
 
-instance Functor (P s e) where
+instance Functor (Cont r) where
   fmap f (P x) = P $ \k -> x (k . f)
 
-instance Applicative (P s e) where
+instance Applicative (Cont r) where
   pure = return
   (<*>) = ap
-  
-instance Monad (P s e) where
+
+instance Monad (Cont r) where
   return x = P (\k -> k x)
   P a >>= f = P (\k -> a (\a' -> fromP  (f a') k))
 
 instance MonadProcess e (P s e)  where
-  wait msg = P $ \k s -> Wait s msg (flip k)
+  wait msg = P $ \k s -> Wait s msg (flip k s)
   pushBack ev = P $ \k s -> pushBackInternal ev (k () s)
 
 instance MonadProcess e m => MonadProcess e (ReaderT r m) where
@@ -61,8 +63,11 @@ waitP s p = do
      then return ev
      else waitP s p
 
+processDone :: P s e x
+processDone = P $ \_ s -> Done s
+
 run :: s -> P s e a -> Process s e
-run s0 (P x) = x (\_ s -> Done s) s0
+run s0 (P p) = p (\_ s -> Done s) s0
 
 exec :: Process s e -> IO (Process s e)
 exec (Do x k) = do
@@ -71,8 +76,5 @@ exec (Do x k) = do
 exec p = return p
 
 resume :: Process s e -> e -> IO (Process s e)
-resume (Wait s _ k) ev = exec (k s ev)
+resume (Wait _ _ k) ev = exec (k ev)
 resume done _ = return done
-
-
-

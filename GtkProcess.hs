@@ -74,7 +74,7 @@ translateEvent (Translation z dx dy) Event {eventCoord = Coord{..},..} = Event{.
 
 quit :: GtkP ()
 quit = do
-  GtkP $ lift $ P $ \_k s -> Done s
+  GtkP $ lift $ processDone
 
 waitInTrans tr msg = translateEvent tr <$> Process.wait msg
 
