@@ -70,18 +70,18 @@ newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
 runGtkP :: Ctx -> St -> GtkP a -> Process St Event
 runGtkP ctx st (GtkP p) = run st (runReaderT p ctx)
 
--- | apply the translation matrix
+coordToPt :: Coord -> (Int,Int)
+coordToPt (Coord x y _ _) = (round x, round y)
+
+-- | apply the current translation matrix and round
 screenCoords :: Coord -> GtkP (Int,Int)
-screenCoords (Coord x y _ _) = do
-  Translation z dx dy <- use stTranslation
-  return (round (dx + z*x), round (dy + z*y))
+screenCoords c = coordToPt . (`apply` c) <$> use stTranslation
 
 translateEvent :: Translation -> Event -> Event
 translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
 
 quit :: GtkP ()
-quit = do
-  GtkP $ lift $ processDone
+quit = GtkP $ lift $ processDone
 
 waitInTrans :: Translation -> String -> GtkP Event
 waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg
