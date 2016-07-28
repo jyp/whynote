@@ -1,6 +1,8 @@
 
 * infrastructure
-pre-filterer for touch events (this should also unify mouse, single touch and mutli touch events)
+- check why Selection is passed to multitouch process.
+- make menu a global feature
+- quadtree
 
 * features
 ** show menu when selection is active (to delete selection)
@@ -9,7 +11,6 @@ pre-filterer for touch events (this should also unify mouse, single touch and mu
 should contain functions such as erase, select, etc.
 ** selection of text by touch
 if some option in the menu is active, then instead of panning/zooming
-one could
-** quadtree
+one could select text
 ** curve optimisation
-
+Replace some segments by a single bezier curve.

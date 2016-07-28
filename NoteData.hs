@@ -16,9 +16,9 @@ data Coord = Coord { coordX :: !Double
                    }
            deriving (Show,Eq,Ord)
 
-data Finger = Finger {fingerStart :: Coord,
-                      fingerCurrent :: Coord}
-
+data Finger' a = Finger {fingerStart :: a,
+                         fingerCurrent :: a} deriving Functor
+type Finger = Finger' Coord
 
 blackColor :: Color
 blackColor = Color 0 0 0 1
@@ -48,6 +48,7 @@ scale :: Double -> Coord -> Coord
 scale f = \(Coord x y z t) -> Coord (s x) (s y) (s z) t
  where s = (f *)
 
+xy :: forall t. Coord -> (Double -> Double -> t) -> t
 xy (Coord x y _ _) f  = f x y
 
 data Selection' a = Selection (Interval a) [Stroke' a]
@@ -59,6 +60,7 @@ instance Area Selection where
 
 emptySelection :: Additive a => Selection' a
 emptySelection = Selection (Box zero zero) []
+isEmptySetection :: forall t. Selection' t -> Bool
 isEmptySetection (Selection _ xs) = null xs
 instance HasBox Selection where
   boundingBox (Selection bbox _) = bbox
@@ -109,8 +111,17 @@ instance Area Box where
 
 data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 
-translation :: Double -> Double -> Double -> Coord -> Coord
-translation zz dx dy (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) (z*zz) t
+apply :: Translation -> Coord -> Coord
+apply (Translation zz dx dy) (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) (z*zz) t
+
+
+instance Additive Translation where
+  (+) (Translation z1 dx1 dy1) (Translation z2 dx2 dy2) = Translation (z1*z2) (dx1 + z1*dx2) (dy1 + z1*dy2)
+  zero = Translation 1 0 0
+instance Group Translation where
+  negate (Translation zz dx dy) = Translation f (- f*dx) (- f*dy)
+    where f = 1/zz
+
 
 data Interval a = Box a a deriving Functor
 type Box = Interval Coord

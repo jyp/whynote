@@ -45,9 +45,14 @@ main = do
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
      setEventCompression drawin False
-     let ctx = Ctx drawin canvas
-     setup <- exec $ runGtkP ctx (initSt initData) mainProcess
-     continuation <- newIORef setup
+     continuation <- newIORef (error "DO NOT ACCESS INITIAL CONTI")
+     let pushEvent ev = do
+           oldState <- readIORef continuation
+           newState <- resume oldState ev
+           writeIORef continuation newState
+         ctx = Ctx drawin canvas pushEvent
+     setup <- exec (runGtkP ctx (initSt initData) mainProcess)
+     writeIORef continuation setup
      staleSt <- newIORef initStaleSt
 
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
@@ -66,6 +71,7 @@ main = do
        debugState
        return False
 
+
      nextSaveTime <- newIORef (0 :: TimeStamp)
      let handleEvent :: EventM t Bool
          handleEvent = do
@@ -77,7 +83,7 @@ main = do
              let (newStaleSt,freshEvent) = computeStaleTouches ev' oldStaleSt
              writeIORef staleSt newStaleSt
              oldState <- readIORef continuation
-             when freshEvent $ case oldState of
+             case oldState of
                Done s -> do
                  writeState fname s
                  mainQuit
@@ -88,8 +94,7 @@ main = do
                  when (t > nextSave) $ do
                     _ <- forkIO $ writeState fname s -- FIXME: have a thread in charge of disk.
                     writeIORef nextSaveTime (t + 5000)
-                 newState <- resume oldState ev'
-                 writeIORef continuation newState
+                 when freshEvent (pushEvent ev')
                _ -> error ("Main: did not expect state: " ++ show oldState)
            return True
 

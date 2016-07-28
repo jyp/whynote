@@ -21,6 +21,7 @@ $(makeLenses ''PenOptions)
 data Ctx
   = Ctx { _ctxDrawWindow :: Gtk.DrawWindow
         , _ctxCanvas :: Gtk.DrawingArea
+        , _eventHandler :: Event -> IO ()
         }
 
 $(makeLenses ''Ctx)
@@ -90,6 +91,19 @@ wait :: String -> GtkP Event
 wait msg = do
   tr <- use stTranslation
   waitInTrans tr msg
+
+wakeup :: Event -> Word32 -> GtkP ()
+wakeup ev msec = do
+  handleEvent <- view eventHandler
+  _ <- liftIO $ flip Gtk.timeoutAdd (fromIntegral msec) $ do
+    putStrLn "WAKE UP!"
+    handleEvent Event {eventCoord = (eventCoord ev) {coordT = eventTime ev + fromIntegral (msec)},
+                       eventSource = Timeout,
+                       eventButton = 0,
+                       eventType = End,
+                       eventModifiers = 0}
+    return False
+  return ()
 
 pushBack :: Translation -> Event -> GtkP ()
 pushBack tr ev = Process.pushBack (translateEvent tr ev)

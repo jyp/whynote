@@ -1,10 +1,10 @@
-module Event where
+module Event (module Event, Word32) where
 
 import NoteData
 import Data.Word
 
--- | 
-data Source = Core | Stylus | Eraser | MultiTouch | Touch
+-- |
+data Source = Core | Stylus | Eraser | MultiTouch | Touch | Timeout
                  deriving (Show,Eq,Ord)
 
 data EventType = Press | Motion | Release
@@ -20,3 +20,6 @@ data Event = Event
                eventCoord :: Coord
              }
            deriving (Show,Eq)
+
+eventTime :: Event -> Word32
+eventTime = coordT . eventCoord

@@ -15,21 +15,21 @@ import Data.List (findIndex)
 
 -- | For debugging multitouch events.
 renderFinger :: Finger -> Render ()
-renderFinger Finger {fingerStart = Coord _ _ _ t0
-                    ,fingerCurrent = Coord x y _z t1} = do
-  if t1 - t0 > 400
-    then Cairo.setSourceRGBA 0 0 0 0.7
-    else Cairo.setSourceRGBA 1 0 0 0.7
-  setLineWidth 5
+renderFinger Finger {fingerCurrent = Coord x y _ _} = do
+  Cairo.setSourceRGBA 0 0 0 0.7
+  setLineWidth 3
   moveTo x y
-  arc x y 80 pi 0
+  arc x y 80 0 (2*pi)
   Cairo.stroke
 
+fingerBox :: Finger -> Box
+fingerBox = extend 84 . pointBox . fingerCurrent
 
 makeTranslationMatrix :: Translation -> Matrix
 makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
 
 
+resetMatrix :: Translation -> Render ()
 resetMatrix = setMatrix . makeTranslationMatrix
 
 {-
