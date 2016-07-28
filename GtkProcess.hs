@@ -1,9 +1,8 @@
 {-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards, GADTs, FlexibleContexts #-}
 module GtkProcess where
 
-import qualified Prelude
+import Prelude ()
 import WNPrelude
-import Control.Applicative
 import Control.Lens
 import Control.Monad.Reader
 import Control.Monad.State
@@ -49,40 +48,54 @@ initSt dat =
     ,_stPen = defaultPen
     }
 
+data StaleSt = StaleSt
+ { _stLastTouch   :: Int        -- button number of the latest finger touch
+ , _stLastStaleTouch :: Int -- button number of the latest finger touch when stylus was used
+ }
+
+-- | Given event and state, compute if a touch event should be kept, and update relevant bookkeeping info.
+computeStaleTouches :: Event -> StaleSt -> (StaleSt,Bool)
+computeStaleTouches Event {..} StaleSt {..}
+  | eventSource `elem` [Stylus,Eraser] = (StaleSt {_stLastStaleTouch = _stLastTouch,..},True)
+  | eventSource == MultiTouch = (StaleSt{_stLastTouch = max eventButton _stLastTouch,..},eventButton > _stLastStaleTouch)
+  | otherwise = (StaleSt{..},True)
+
+initStaleSt :: StaleSt
+initStaleSt = StaleSt {_stLastTouch = -1 ,_stLastStaleTouch = -1}
+
+
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
   deriving (Monad, MonadIO, MonadReader Ctx, MonadProcess Event, Functor, Applicative, MonadState St)
 
 runGtkP :: Ctx -> St -> GtkP a -> Process St Event
 runGtkP ctx st (GtkP p) = run st (runReaderT p ctx)
 
--- apply the above matrix
+-- | apply the translation matrix
 screenCoords :: Coord -> GtkP (Int,Int)
 screenCoords (Coord x y _ _) = do
   Translation z dx dy <- use stTranslation
   return (round (dx + z*x), round (dy + z*y))
 
 translateEvent :: Translation -> Event -> Event
-translateEvent (Translation z dx dy) Event {eventCoord = Coord{..},..} = Event{..}
-  where eventCoord = Coord{coordX = f*(coordX - dx), coordY =  f*(coordY - dy),..}
-        f = 1/z
-
--- rectToBox :: Translation -> Gtk.Rectangle -> Box
--- rectToBox (Translation z dx dy) (Gtk.Rectangle x y w h) = Box (Coord (tx x) (ty y) 1 0) (Coord (tx (x+w)) (ty (y+h)) 1 0)
---   where tx a = dx + f*fromIntegral a
---         ty a = dy + f*fromIntegral a
---         f = 1/z
+translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
 
 quit :: GtkP ()
 quit = do
   GtkP $ lift $ processDone
 
-waitInTrans tr msg = translateEvent tr <$> Process.wait msg
+waitInTrans :: Translation -> String -> GtkP Event
+waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg
 
+wait :: String -> GtkP Event
 wait msg = do
   tr <- use stTranslation
   waitInTrans tr msg
 
-renderAll St{..} msg = do
+pushBack :: Translation -> Event -> GtkP ()
+pushBack tr ev = Process.pushBack (translateEvent tr ev)
+
+renderAll :: St -> String -> Render ()
+renderAll St{..} _msg = do
    -- moveTo 0 10
    -- showText $ msg
    resetMatrix  _stTranslation

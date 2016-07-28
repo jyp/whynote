@@ -2,7 +2,6 @@
 import Graphics.UI.Gtk as Gtk
 import Graphics.Rendering.Cairo
 import Device
-import Render
 import NoteData
 import Control.Monad.Reader
 import Config
@@ -10,13 +9,13 @@ import Process
 import GtkProcess
 import App
 import Data.IORef
-import Data.Word
 import Event
 import Data.Time.LocalTime
 -- import System.Locale (defaultTimeLocale)
 import Data.Time.Format
-import System.Mem
+-- import System.Mem
 import Control.Concurrent (forkIO)
+
 
 main :: IO ()
 main = do
@@ -28,7 +27,7 @@ main = do
        [fname] -> do
          dat <- loadState fname
          return (dat,fname)
-       _ -> error "Give 0 or 1 argument"
+       _ -> error "usage: whynote [file.wnote]"
 
      WNConfig devicesCfg <- loadConfig
      window <- windowNew
@@ -49,13 +48,14 @@ main = do
      let ctx = Ctx drawin canvas
      setup <- exec $ runGtkP ctx (initSt initData) mainProcess
      continuation <- newIORef setup
+     staleSt <- newIORef initStaleSt
 
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
          k <- readIORef continuation
          case k of
-           Wait st msg _ -> renderWithDrawWindow drawin $ renderAll st msg
+           Wait st msg _ -> renderWithDrawWindow drawin $ renderAll st msg -- TODO: pass the whole continuation to renderAll
            _ -> return ()
 
      let debugState = do
@@ -72,23 +72,25 @@ main = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             let t = coordT . eventCoord $ ev'
-             do
-               oldState <- readIORef continuation
-               case oldState of
-                 Done s -> do
-                   writeState fname s
-                   mainQuit
-                 Wait s _ k -> do
-                   nextSave <- readIORef nextSaveTime
-                   -- Save the file every second
-                   when (t > nextSave) $ do
-                      forkIO $ writeState fname s
-                      writeIORef nextSaveTime (t + 5000)
-                   newState <- resume oldState ev'
-                   -- print newState
-                   writeIORef continuation newState
-                   -- System.Mem.performGC
+             let t = Event.eventTime ev'
+             oldStaleSt <- readIORef staleSt
+             let (newStaleSt,freshEvent) = computeStaleTouches ev' oldStaleSt
+             writeIORef staleSt newStaleSt
+             oldState <- readIORef continuation
+             when freshEvent $ case oldState of
+               Done s -> do
+                 writeState fname s
+                 mainQuit
+               Wait s msg _ -> do
+                 putStrLn msg
+                 nextSave <- readIORef nextSaveTime
+                 -- Save the file every second
+                 when (t > nextSave) $ do
+                    _ <- forkIO $ writeState fname s -- FIXME: have a thread in charge of disk.
+                    writeIORef nextSaveTime (t + 5000)
+                 newState <- resume oldState ev'
+                 writeIORef continuation newState
+               _ -> error ("Main: did not expect state: " ++ show oldState)
            return True
 
      on canvas touchEvent handleEvent
