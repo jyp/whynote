@@ -87,11 +87,33 @@ quit = GtkP $ lift $ processDone
 waitInTrans :: Translation -> String -> GtkP Event
 waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg
 
+invalidateAll :: GtkP ()
+invalidateAll = do
+  Ctx {..} <- ask
+  liftIO $ do
+    w <- liftIO $ Gtk.drawWindowGetWidth _ctxDrawWindow
+    h <- liftIO $ Gtk.drawWindowGetHeight _ctxDrawWindow
+    Gtk.drawWindowInvalidateRect _ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
+
+invalidateIn :: Translation -> Box -> GtkP ()
+invalidateIn tr b0 = do
+  let Box (x0,y0) (x1,y1) = fmap coordToPt $ extend 5 $ fmap (apply tr) b0
+  Ctx {..} <- ask
+  let rect = (Gtk.Rectangle x0 y0 (x1-x0) (y1-y0))
+  liftIO $ Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
+
+invalidate :: Box -> GtkP ()
+invalidate bx = do
+  tr <- use stTranslation
+  invalidateIn tr bx
+
 wait :: String -> GtkP Event
 wait msg = do
   tr <- use stTranslation
   waitInTrans tr msg
 
+-- | Send a wakeup event in the given about of time. The timestamp of the wakeup
+-- event is based on the timestamp of the input event.
 wakeup :: Event -> Word32 -> GtkP ()
 wakeup ev msec = do
   handleEvent <- view eventHandler

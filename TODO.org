@@ -14,3 +14,4 @@ if some option in the menu is active, then instead of panning/zooming
 one could select text
 ** curve optimisation
 Replace some segments by a single bezier curve.
+** evaluate use of UNDO

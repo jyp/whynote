@@ -17,26 +17,6 @@ import Data.Bits
 import qualified Data.Vector as V
 import Config (configuredPens)
 
-invalidateAll :: GtkP ()
-invalidateAll = do
-  Ctx {..} <- ask
-  liftIO $ do
-    w <- liftIO $ Gtk.drawWindowGetWidth _ctxDrawWindow
-    h <- liftIO $ Gtk.drawWindowGetHeight _ctxDrawWindow
-    Gtk.drawWindowInvalidateRect _ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
-
-invalidateIn :: Translation -> Box -> GtkP ()
-invalidateIn tr b0 = do
-  let Box (x0,y0) (x1,y1) = fmap coordToPt $ extend 5 $ fmap (apply tr) b0
-  Ctx {..} <- ask
-  let rect = (Gtk.Rectangle x0 y0 (x1-x0) (y1-y0))
-  liftIO $ Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
-
-invalidate :: Box -> GtkP ()
-invalidate bx = do
-  tr <- use stTranslation
-  invalidateIn tr bx
-
 mkStroke :: [Coord] -> GtkP Stroke
 mkStroke cs = do
   opts <- use stPen
@@ -231,7 +211,6 @@ touchProcessDetect time0 touches
        _ -> do liftIO $ putStrLn $ "WARNING: unexpected event: " ++ show ev
                rb
 
-
 -- We pass the original selection here, so that we do not repeatedly modify the
 -- selection with small translations, which would eventually accumulate
 -- numerical errors.
@@ -240,7 +219,9 @@ touchProcess selection origTrans touches
   | M.null touches = exit
   | otherwise = do
   ev <- waitInTrans origTrans "multi-touch"
-  let rb = rollback ev origTrans >> exit
+  let rb = do pushBack origTrans ev
+              stTranslation .= origTrans
+              exit
   case eventSource ev of
     MultiTouch -> case () of
       _ | not (eventButton ev `M.member` touches) -> exit
@@ -299,28 +280,6 @@ transSel origSel a0 a1 factor = do
   let (Coord dx dy _ _) = a1 - scale factor a0
   stSelection .= fmap (apply (Translation factor dx dy)) origSel
   invalidateAll -- optim. possible
-
-simpleTouchProcess :: Translation -> Coord -> GtkP ()
-simpleTouchProcess origTrans origCoord = do
-  let cont = simpleTouchProcess origTrans origCoord
-  ev <- waitInTrans origTrans "simple-touch"
-  case eventSource ev of
-    Touch -> case () of
-      _ | eventType ev `elem` [Release]
-          -> return () -- finish
-      _ | eventType ev `elem` [Motion,Press]
-          -> do transSheet origTrans origCoord (eventCoord ev) 1
-                cont
-      _ -> -- non-multi touch event
-        cont
-    Stylus -> Process.pushBack ev -- FIXME: translated event!
-    Eraser -> Process.pushBack ev -- FIXME: translated event!
-    _ -> cont
-
-rollback :: Event -> Translation -> GtkP ()
-rollback ev origTrans = do
-  pushBack origTrans ev
-  stTranslation .= origTrans
 
 moveSelWithPen :: Selection -> Coord -> GtkP ()
 moveSelWithPen origSel origCoord = do
@@ -451,9 +410,5 @@ mainProcess = do
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
         touchProcessEntry ev
-    Event {eventSource = Touch,..} | eventModifiers .&. 256 /= 0 -> do
-      when (eventType `elem` [Press,Motion]) $ do
-        tr <- use stTranslation
-        simpleTouchProcess tr eventCoord
     _ -> return ()
   mainProcess
