@@ -3,7 +3,6 @@ module App where
 import Control.Lens hiding (transform)
 import Control.Monad
 import Control.Monad.IO.Class
-import Control.Monad.Reader
 import Event
 import GtkProcess
 import NoteData
@@ -13,7 +12,6 @@ import qualified Data.Map.Strict as M
 import qualified Graphics.UI.Gtk as Gtk
 import Prelude ()
 import qualified Process
-import Data.Bits
 import qualified Data.Vector as V
 import Config (configuredPens)
 
@@ -301,58 +299,47 @@ waitForRelease source = do
       Event {eventModifiers = 0} -> return () -- motion without any pressed key
       _ -> waitForRelease source
 
-render r = do
-  dw <- view ctxDrawWindow
-  liftIO $ Gtk.renderWithDrawWindow dw r
 
 shiftUndos n (us,d:ds) | n > 0 = shiftUndos (n-1) (d:us,ds)
 shiftUndos n (u:us,ds) | n < 0 = shiftUndos (n+1) (us,u:ds)
 shiftUndos n x = x
 
-undoProcess y0 st = do
-  ev <- wait "undo"
-  (_,y) <- screenCoords $ eventCoord $ ev
+undoProcess c0 st = do
+  ev <- waitInTrans zero "undo"
   let (newRedo,kept) = shiftUndos dy st
-      dy = (y-y0) `div` 10
+      dy = dist c0 (eventCoord ev) / 10
   stNoteData .= kept
   stRedo .= newRedo
   invalidateAll
   case ev of
       Event {eventType = Press} -> waitForRelease (eventSource ev)
-      _ -> undoProcess y0 st
+      _ -> undoProcess c0 st
 
-distC :: (Int,Int) ->  (Int,Int) -> Int -> Bool
-distC (x1,y1)(x2,y2) d = sq(x2-x1) + sq(y2-y1) > sq d
-  where sq x = x*x
+menu :: Double -> [(String,Coord -> GtkP ())] -> Coord -> GtkP ()
+menu a0 options c = menu' a0 c c options
 
-menu :: [(String,Coord -> GtkP ())] -> Coord -> GtkP ()
-menu options c = do
-  c' <- screenCoords c
-  menu' c' c' options
-
-menu' :: (Int, Int) -> (Int, Int) -> [(String, Coord -> GtkP ())] -> GtkP ()
-menu' p c options = do
-  let hideMenu = do stRender .= return (); invalidateAll; return ()
-  if distC p c (round menuOuterCircle)
+menu' :: Double -> Coord -> Coord -> [(String, Coord -> GtkP ())] -> GtkP ()
+menu' a0 p c options = do
+  let hideMenu = do stRender .= return (); invalidateAll
+  if dist p c > menuOuterCircle
      then hideMenu
      else do
-       let rMenu show p'' = renderMenu show p'' c $ map fst options
-       stRender .= (rMenu True p >> return ())
+       let rMenu sho p' = renderMenu sho a0 p' c $ map fst options
+       stRender .= do active <- rMenu True p ; liftIO$print active; return ()
        invalidateAll -- TODO optimize
-       Event {..} <- wait "menu"
-       p' <- screenCoords eventCoord
-       active <- render $ rMenu False p'
+       Event {..} <- waitInTrans zero "menu"
+       active <- renderNow $ rMenu False eventCoord
        -- liftIO $ print active
        case eventType of
          Press -> do
            hideMenu
            case active of
-              Just i -> (map snd options !! i) eventCoord
+              Just i -> snd (options !! i) eventCoord
               Nothing -> return ()
-         _ -> menu' p' c options
+         _ -> menu' a0 eventCoord c options
 
+penMenu :: [(String, Coord -> GtkP ())]
 penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
-
 
 -- 1: shift
 -- 256 mouse 1
@@ -361,26 +348,25 @@ penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
 mainProcess :: GtkP ()
 mainProcess = do
   ev <- wait "top-level"
-  -- when (eventType ev == Press) $ liftIO $ print ev
   sel <- use stSelection
+  tr <- use stTranslation
   let pressure = coordZ$ eventCoord $ ev
       havePressure = pressure > 0.01
       haveSel = not . isEmptySetection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
-  (cx,_) <- screenCoords (eventCoord ev)
+      evOrig = apply tr (eventCoord ev)
   case ev of
-    Event {eventSource = Stylus,..} | cx < 30 -> do
-      menu ([("Delete",\_ -> do
-                 deleteSelection
-                 stSelection .= emptySelection
-                 ) | haveSel] ++
-            [("Pen",menu penMenu)
-            ,("Undo",\c -> do
-                 (_,y) <- screenCoords c
-                 dones <- use stNoteData
-                 redos <- use stRedo
-                 undoProcess y (redos,dones))
-            ,("Quit",menu [("Confirm",\_ -> quit)])]) eventCoord
+    Event {eventSource = Stylus,..} | dist evOrig rootMenuCenter < menuRootRadius -> do
+      menu (pi/4) ([("Delete",\_ -> do
+                        deleteSelection
+                        stSelection .= emptySelection
+                    ) | haveSel] ++
+                   [("Pen",menu 0 penMenu)
+                   ,("Undo",\c -> do
+                        dones <- use stNoteData
+                        redos <- use stRedo
+                        undoProcess c (redos,dones))
+                   ,("Quit",menu 0 [("Confirm",\_ -> quit)])]) rootMenuCenter
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || eventModifiers == 256 -> do
       if haveSel
         then if inSel

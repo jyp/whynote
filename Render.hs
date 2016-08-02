@@ -127,44 +127,55 @@ boxRectangle (Box lo hi) =
 
 type Point = (Double,Double)
 
+menuRootRadius = 40
 menuInnerCircle = 50
 menuOuterCircle = 150
 
-ptDouble :: (Int,Int) -> Point
-ptDouble (x,y) = (fromIntegral x, fromIntegral y)
+renderMenuRoot :: String -> Coord -> Render ()
+renderMenuRoot t (Coord cx cy _ _) = do
+  Cairo.translate cx cy
+  moveTo menuRootRadius 0
+  arc 0 0 menuRootRadius 0 (2*pi)
+  setSourceRGBA 1 1 1 1 >> fillPreserve
+  setFontSize 15
+  TextExtents {textExtentsWidth = w, textExtentsHeight = h} <- textExtents t
+  moveTo (-w/2) (h/2)
+  setSourceRGBA 0 0 0 1 >> showText t >> stroke
 
+coordToPt :: Coord -> (Double,Double)
+coordToPt (Coord x y _ _) = (x,y)
+
+-- TODO: use a record for the options.
 -- | Render a menu, and return the selected option.
 -- @renderMenu doRender (x,y) (cx,cy) txts@
+--  - a0: the direction of the menu (center), in radians
 --  - doRender: render the menu, or just return the selected option?
 --  - (x,y): the position of the cursor (determines which option is selected)
 --  - (cx,cy): center of the dial
 --  - txts: options to render (by text)
-renderMenu :: Bool -> (Int,Int) -> (Int,Int) -> [String] -> Render (Maybe Int)
-renderMenu doRender p c txts = renderDial doRender (ptDouble p) (ptDouble c) 5 menuInnerCircle menuOuterCircle 12 txts
+renderMenu :: Bool -> Double -> Coord -> Coord -> [String] -> Render (Maybe Int)
+renderMenu doRender a0 p c txts = renderDial doRender a0 (coordToPt p) (coordToPt c) 5 menuInnerCircle menuOuterCircle 12 txts
 
 -- | Save excursion
 saveEx :: Render a -> Render a
-saveEx p = do
-  save
-  x <- p
-  restore
-  return x
+saveEx p = save *> p <* restore
 
 -- TODO: use a record for these options.
 -- | Render a menu dial, and return the selected option.
--- @renderDial doRender (x,y) (cx,cy) dx inner outer n txts@
+-- @renderDial doRender a0 (x,y) (cx,cy) dx inner outer n txts@
 --  - doRender: render the menu, or just return the selected option?
+--  - a0: the direction of the menu (center), in radians
 --  - (x,y): the position of the cursor (determines which option is selected)
 --  - (cx,cy): center of the dial
 --  - dx: distance between the options
 --  - inner,outer : inner and outer radiuses
 --  - n: nominal number of options (determines the size and placement of the options)
 --  - txts: options to render (by text)
-renderDial :: Bool -> Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
-renderDial doRender (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
+renderDial :: Bool -> Double -> Point -> Point -> Double -> Double -> Double -> Int -> [String] -> Render (Maybe Int)
+renderDial doRender theta (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
   let angles :: [Double]
       angles = map (+shift) [0,-2*pi/(fromIntegral n).. -2*pi]
-      shift = pi*fromIntegral (length txts)/(fromIntegral n)
+      shift = theta + pi*fromIntegral (length txts)/(fromIntegral n)
       daIn = dx/inner
       daOut = dx/outer
   identityMatrix

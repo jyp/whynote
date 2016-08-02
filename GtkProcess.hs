@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards, GADTs, FlexibleContexts #-}
+{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards, GADTs, FlexibleContexts, ScopedTypeVariables #-}
 module GtkProcess where
 
 import Prelude ()
@@ -37,6 +37,9 @@ data St =
      , _stPen         :: PenOptions -- current pen
      }
 
+newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
+  deriving (Monad, MonadIO, MonadReader Ctx, MonadProcess Event, Functor, Applicative, MonadState St)
+
 $(makeLenses ''St)
 
 initSt :: NoteData -> St
@@ -64,19 +67,8 @@ computeStaleTouches Event {..} StaleSt {..}
 initStaleSt :: StaleSt
 initStaleSt = StaleSt {_stLastTouch = -1 ,_stLastStaleTouch = -1}
 
-
-newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
-  deriving (Monad, MonadIO, MonadReader Ctx, MonadProcess Event, Functor, Applicative, MonadState St)
-
 runGtkP :: Ctx -> St -> GtkP a -> Process St Event
 runGtkP ctx st (GtkP p) = run st (runReaderT p ctx)
-
-coordToPt :: Coord -> (Int,Int)
-coordToPt (Coord x y _ _) = (round x, round y)
-
--- | apply the current translation matrix and round
-screenCoords :: Coord -> GtkP (Int,Int)
-screenCoords c = coordToPt . (`apply` c) <$> use stTranslation
 
 translateEvent :: Translation -> Event -> Event
 translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
@@ -97,7 +89,7 @@ invalidateAll = do
 
 invalidateIn :: Translation -> Box -> GtkP ()
 invalidateIn tr b0 = do
-  let Box (x0,y0) (x1,y1) = fmap coordToPt $ extend 5 $ fmap (apply tr) b0
+  let Box (x0,y0) (x1,y1) = fmap (over both round . coordToPt) $ extend 5 $ fmap (apply tr) b0
   Ctx {..} <- ask
   let rect = (Gtk.Rectangle x0 y0 (x1-x0) (y1-y0))
   liftIO $ Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
@@ -130,15 +122,6 @@ wakeup ev msec = do
 pushBack :: Translation -> Event -> GtkP ()
 pushBack tr ev = Process.pushBack (translateEvent tr ev)
 
-renderAll :: St -> String -> Render ()
-renderAll St{..} _msg = do
-   -- moveTo 0 10
-   -- showText $ msg
-   resetMatrix  _stTranslation
-   renderNoteData _stNoteData
-   renderSelection _stSelection
-   _stRender
-
 writeState :: String -> St -> IO ()
 writeState fname St {..} = writeNote fname (NoteFile _stNoteData)
 
@@ -146,3 +129,19 @@ loadState :: String -> IO NoteData
 loadState fname = do
   NoteFile s <- readNote fname
   return s
+
+renderNow :: Render a -> GtkP a
+renderNow r = do
+  dw <- view ctxDrawWindow
+  liftIO $ Gtk.renderWithDrawWindow dw r
+
+rootMenuCenter :: Coord
+rootMenuCenter = Coord 40 40 0 0
+
+renderAll :: St -> String -> Render ()
+renderAll St{..} _msg = do
+   renderMenuRoot "menu" rootMenuCenter
+   resetMatrix  _stTranslation
+   renderNoteData _stNoteData
+   renderSelection _stSelection
+   _stRender

@@ -109,6 +109,7 @@ instance Area Box where
     p1 `xy` \x1 y1 -> p2 `xy` \x2 y2 -> x1 <= x && x <= x2 && y1 <= y && y <= y2
   nearArea d p b = inArea p (extend d b)
 
+-- FIXME: rename to 'dilation'
 data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 
 apply :: Translation -> Coord -> Coord
