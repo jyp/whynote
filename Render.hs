@@ -133,6 +133,7 @@ menuOuterCircle = 150
 
 renderMenuRoot :: String -> Coord -> Render ()
 renderMenuRoot t (Coord cx cy _ _) = do
+  resetMatrix zero
   Cairo.translate cx cy
   moveTo menuRootRadius 0
   arc 0 0 menuRootRadius 0 (2*pi)

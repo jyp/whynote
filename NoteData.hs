@@ -51,17 +51,17 @@ scale f = \(Coord x y z t) -> Coord (s x) (s y) (s z) t
 xy :: forall t. Coord -> (Double -> Double -> t) -> t
 xy (Coord x y _ _) f  = f x y
 
-data Selection' a = Selection (Interval a) [Stroke' a]
+data Selection' a = Selection {selectionBox :: Interval a, selectionStrokes::[Stroke' a]}
   deriving Functor
 type Selection = Selection' Coord
 instance Area Selection where
   inArea p (Selection b _) = inArea p b
   nearArea d p (Selection b _) = nearArea d p b
 
-emptySelection :: Additive a => Selection' a
+emptySelection :: Selection
 emptySelection = Selection (Box zero zero) []
-isEmptySetection :: forall t. Selection' t -> Bool
-isEmptySetection (Selection _ xs) = null xs
+isEmptySelection :: forall t. Selection' t -> Bool
+isEmptySelection (Selection _ xs) = null xs
 instance HasBox Selection where
   boundingBox (Selection bbox _) = bbox
 ------------------
@@ -124,7 +124,7 @@ instance Group Translation where
     where f = 1/zz
 
 
-data Interval a = Box a a deriving Functor
+data Interval a = Box {intervalLo :: a, intervalHi :: a} deriving Functor
 type Box = Interval Coord
 newtype Curve' a = Curve (V.Vector a)
   deriving (Functor,HasBox)

@@ -9,7 +9,6 @@ import NoteData
 import Render
 import WNPrelude
 import qualified Data.Map.Strict as M
-import qualified Graphics.UI.Gtk as Gtk
 import Prelude ()
 import qualified Process
 import qualified Data.Vector as V
@@ -61,10 +60,9 @@ lassoProcessLoop source c = do
 
 deselect :: GtkP ()
 deselect = do
-  (Selection bbox oldSel) <- use stSelection
+  (Selection _ oldSel) <- use stSelection
   stNoteData %= (oldSel++)
-  stSelection .= emptySelection
-  invalidate $ bbox
+  setSelection emptySelection
 
 lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
@@ -72,7 +70,7 @@ lassoProcess source = do
   bounds <- lassoProcessLoop source []
   stRender .= return ()
   (inside,outside) <- lassoPartitionStrokes (box bounds) <$> use stNoteData
-  stSelection .= mkSelection inside
+  setSelection (mkSelection inside)
   stNoteData .= outside
   invalidate $ boundingBox bounds
   return ()
@@ -83,9 +81,7 @@ mkSelection strks = Selection (extend 10 $ boundingBox strks) strks
 addToSelection :: [Stroke] -> GtkP ()
 addToSelection strks = do
   Selection _ s0 <- use stSelection
-  let newSel = mkSelection (s0 ++ strks)
-  stSelection .= newSel
-  invalidate $ boundingBox newSel
+  setSelection (mkSelection (s0 ++ strks))
 
 selectNear :: Coord -> GtkP ()
 selectNear p = do
@@ -97,21 +93,24 @@ selectNear p = do
 fuzzyFactor :: GtkP Double
 fuzzyFactor = (10 /) <$> use (stTranslation.trZoom)
 
+setSelection :: Selection -> GtkP ()
+setSelection sel = do
+  stSelection .= sel
+  invalidateAll -- because the menu needs to be redrawn (and it annoying to figure where it is)
+
 deleteSelection :: GtkP ()
 deleteSelection = do
-  Selection bbox sel <- use stSelection
-  stSelection .= emptySelection
+  Selection _ sel <- use stSelection
+  setSelection emptySelection
   stRedo %= (sel++)
-  invalidate $ boundingBox bbox
 
 deselectNear :: Coord -> GtkP ()
 deselectNear p = do
   f <- fuzzyFactor
-  Selection bbox strokes <- use stSelection
+  Selection _ strokes <- use stSelection
   let (deselected,kept) = partitionStrokesNear f p strokes
-  stSelection .= mkSelection kept
+  setSelection (mkSelection kept)
   stNoteData %= (++ deselected)
-  invalidate bbox
 
 eraseNear :: Coord -> GtkP ()
 eraseNear p = do
@@ -171,6 +170,7 @@ touchProcessEntry ev = do
   wakeup ev 70
   touchProcessDetect (Just (eventTime ev)) (M.singleton (eventButton ev) (fingerBegin (eventCoord ev)))
 
+-- FIXME: use absolute positions for this process.
 touchProcessDetect :: Maybe Word32 -> M.Map Int Finger -> GtkP ()
 touchProcessDetect time0 touches
   | M.null touches = return ()
@@ -183,7 +183,6 @@ touchProcessDetect time0 touches
     Just t0 | (eventTime ev > t0 + 50) && (M.size touches `elem` [1,2]) -> do
        -- fingers stable, run next phase.
        -- FIXME: two input touches must not start too close from each other!
-       pushBack tr ev
        sel <- use stSelection
        let msel = if any (`inArea` sel) (map fingerStart (M.elems touches))
                   then Just sel
@@ -193,6 +192,7 @@ touchProcessDetect time0 touches
          resetMatrix zero
          forM_ touches0 renderFinger
        invalidateIn zero $ foldr1 unionBox $ map (fingerBox) touches0
+       rb
        touchProcess msel tr touches
     _ -> case eventSource ev of
        MultiTouch -> case () of
@@ -235,7 +235,7 @@ touchProcess selection origTrans touches
                     a0 = average ps0
                     a1 = average ps1
 
-                stRender .= do -- show where fingers, to give feedback that the touch gesture is recognized. TODO: do this when the detection is confirmed instead.
+                stRender .= do
                   resetMatrix zero -- to have constant size rendering of fingers.
                   forM_ (M.elems  touches') (renderFinger . inIdMatrix)
 
@@ -276,8 +276,7 @@ transSheet origTrans a0 a1 factor = do
 transSel :: Selection -> Coord -> Coord -> Double -> GtkP ()
 transSel origSel a0 a1 factor = do
   let (Coord dx dy _ _) = a1 - scale factor a0
-  stSelection .= fmap (apply (Translation factor dx dy)) origSel
-  invalidateAll -- optim. possible
+  setSelection (fmap (apply (Translation factor dx dy)) origSel)
 
 moveSelWithPen :: Selection -> Coord -> GtkP ()
 moveSelWithPen origSel origCoord = do
@@ -347,21 +346,20 @@ penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
 -- 1024 mouse 3 (right)
 mainProcess :: GtkP ()
 mainProcess = do
+  st <- use (to id)
   ev <- wait "top-level"
   sel <- use stSelection
   tr <- use stTranslation
   let pressure = coordZ$ eventCoord $ ev
       havePressure = pressure > 0.01
-      haveSel = not . isEmptySetection $ sel
+      haveSel = not . isEmptySelection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
       evOrig = apply tr (eventCoord ev)
   case ev of
+    Event {eventSource = Stylus,..} | haveSel, dist evOrig (selMenuCenter st) < menuRootRadius ->
+      menu (pi/4) [("Delete",\_ -> deleteSelection)] (selMenuCenter st)
     Event {eventSource = Stylus,..} | dist evOrig rootMenuCenter < menuRootRadius -> do
-      menu (pi/4) ([("Delete",\_ -> do
-                        deleteSelection
-                        stSelection .= emptySelection
-                    ) | haveSel] ++
-                   [("Pen",menu 0 penMenu)
+      menu (pi/4) ([("Pen",menu 0 penMenu)
                    ,("Undo",\c -> do
                         dones <- use stNoteData
                         redos <- use stRedo
@@ -398,3 +396,19 @@ mainProcess = do
         touchProcessEntry ev
     _ -> return ()
   mainProcess
+
+
+selMenuCenter :: St -> Coord
+selMenuCenter St{..} = apply _stTranslation (intervalHi (selectionBox _stSelection))
+
+rootMenuCenter :: Coord
+rootMenuCenter = Coord 40 40 0 0
+
+renderAll st@St{..} _msg = do
+   let whenSel = when (not $ isEmptySelection $ _stSelection)
+   resetMatrix  _stTranslation
+   renderNoteData _stNoteData
+   whenSel $ renderSelection _stSelection
+   _stRender
+   renderMenuRoot "menu" rootMenuCenter
+   whenSel $ renderMenuRoot "sel" (selMenuCenter st)

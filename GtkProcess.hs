@@ -43,14 +43,13 @@ newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
 $(makeLenses ''St)
 
 initSt :: NoteData -> St
-initSt dat =
-  St{_stRender = return ()
-    ,_stNoteData = dat
-    ,_stSelection = emptySelection
-    ,_stTranslation = Translation 1 0 0
-    ,_stRedo = []
-    ,_stPen = defaultPen
-    }
+initSt dat = St{_stRender = return ()
+               ,_stNoteData = dat
+               ,_stSelection = emptySelection
+               ,_stTranslation = Translation 1 0 0
+               ,_stRedo = []
+               ,_stPen = defaultPen
+               }
 
 data StaleSt = StaleSt
  { _stLastTouch   :: Int        -- button number of the latest finger touch
@@ -134,14 +133,3 @@ renderNow :: Render a -> GtkP a
 renderNow r = do
   dw <- view ctxDrawWindow
   liftIO $ Gtk.renderWithDrawWindow dw r
-
-rootMenuCenter :: Coord
-rootMenuCenter = Coord 40 40 0 0
-
-renderAll :: St -> String -> Render ()
-renderAll St{..} _msg = do
-   renderMenuRoot "menu" rootMenuCenter
-   resetMatrix  _stTranslation
-   renderNoteData _stNoteData
-   renderSelection _stSelection
-   _stRender
