@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, DeriveFunctor, OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, DeriveFunctor, DeriveFoldable, OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
@@ -77,7 +77,6 @@ extend :: Double -> Box -> Box
 extend d (Box p1 p2) = Box (p1-x)(p2+x)
   where x = Coord d d 0 0
 
--- TODO? : replace by Foldable ?
 class HasBox a where
   boundingBox :: a -> Box
 
@@ -88,7 +87,7 @@ instance HasBox Box where
   boundingBox = id
 
 instance HasBox a => HasBox [a] where
-  boundingBox = boxUnion . map boundingBox
+  boundingBox = foldl' (\/) top . map boundingBox
 
 instance HasBox a => HasBox (V.Vector a) where
   boundingBox = boundingBox . V.toList
@@ -115,7 +114,6 @@ data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 apply :: Translation -> Coord -> Coord
 apply (Translation zz dx dy) (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) (z*zz) t
 
-
 instance Additive Translation where
   (+) (Translation z1 dx1 dy1) (Translation z2 dx2 dy2) = Translation (z1*z2) (dx1 + z1*dx2) (dy1 + z1*dy2)
   zero = Translation 1 0 0
@@ -124,7 +122,7 @@ instance Group Translation where
     where f = 1/zz
 
 
-data Interval a = Box {intervalLo :: a, intervalHi :: a} deriving Functor
+data Interval a = Box {intervalLo :: !a, intervalHi :: !a} deriving Functor
 type Box = Interval Coord
 newtype Curve' a = Curve (V.Vector a)
   deriving (Functor,HasBox)
@@ -141,26 +139,6 @@ instance Area Stroke where
   inArea p (Stroke _ x) = inArea p x
   nearArea d p (Stroke _ x) = nearArea d p x
 type NoteData = [Stroke]
-
-
-emptyNoteData :: NoteData
-emptyNoteData = []
-
-unzipCoords :: [Coord] -> ([Double],[Double],[Double],[Word32])
-unzipCoords [] = ([],[],[],[])
-unzipCoords (Coord x y z t:ps) = (x:xs, y:ys, z:zs, t:ts)
-  where (xs,ys,zs,ts) = unzipCoords ps
-
-boxCoords :: Box -> (Coord,Coord)
-boxCoords (Box p1 p2) = (p1,p2)
-
-boxUnion :: [Box] -> Box
-boxUnion [] = Box zero zero
-boxUnion boxes = Box (Coord (minimum loxs)(minimum loys)(minimum lozs)(minimum lots))
-                     (Coord (maximum hixs)(maximum hiys)(maximum hizs)(maximum hits))
-  where (los,his) = unzip $ map boxCoords $ boxes
-        (loxs,loys,lozs,lots) = unzipCoords los
-        (hixs,hiys,hizs,hits) = unzipCoords his
 
 -- | Quadrand where the coord lies
 quadrant :: Coord -> Int
@@ -207,27 +185,27 @@ instance Area Coord where
 partitionStrokesNear :: Double -> Coord -> [Stroke] -> ([Stroke],[Stroke])
 partitionStrokesNear d2 p strks = partition (nearArea d2 p) strks
 
-opCoord :: (forall a. Ord a => a -> a -> a) -> Coord -> Coord -> Coord
-opCoord op (Coord x1 y1 z1 t1) (Coord x2 y2 z2 t2) = Coord (op x1 x2) (op y1 y2) (op z1 z2) (op t1 t2)
+class Lattice a where
+  (\/),(/\) :: a -> a -> a
+  bottom,top :: a
 
-minCoord = opCoord min
-maxCoord = opCoord max
-
-overlap :: Box -> Box -> Bool
-overlap (Box l1 h1) (Box l2 h2) =
-    l1 `xy` \lx1 ly1 ->
-    l2 `xy` \lx2 ly2 ->
-    h1 `xy` \hx1 hy1 ->
-    h2 `xy` \hx2 hy2 ->
-    (lx2 <= hx1 && ly2 <= hy1) || (lx1 <= hx2 && ly1 <= hy2)
-intersectBox (Box l1 h1) (Box l2 h2) = Box (max l1 l2) (min h1 h2)
-unionBox (Box l1 h1) (Box l2 h2) = Box (min l1 l2) (max h1 h2)
-pointBox x = Box x x
+infty :: Double
+infty = 1/0
+instance Lattice Coord where
+  (Coord x1 y1 z1 t1) \/ (Coord x2 y2 z2 t2) = Coord (max x1 x2) (max y1 y2)(max z1 z2)(max t1 t2)
+  c1 /\ c2 = negate ((negate c1) \/ (negate c2))
+  bottom = Coord infty infty infty maxBound
+  top = Coord (-infty) (-infty) (-infty) minBound
+instance Lattice a => Lattice (Interval a) where
+  (Box l1 h1) \/ (Box l2 h2) = Box (l1 /\ l2) (h1 \/ h2)
+  (Box l1 h1) /\ (Box l2 h2) = Box (l1 \/ l2) (h1 /\ h2)
+  bottom = Box top bottom
+  top = Box bottom top
 
 nilBox (Box (Coord x0 y0 _ _) (Coord x1 y1 _ _)) = (x0 >= x1) || (y0 >= y1)
 
 overlapBox :: Box -> Box -> Bool
-overlapBox b1 b2 = not $ nilBox $ intersectBox b1 b2
+overlapBox b1 b2 = not $ nilBox $ b1 /\ b2
 
 ----
 -- Serialisation

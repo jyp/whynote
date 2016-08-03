@@ -115,7 +115,7 @@ deselectNear p = do
 eraseNear :: Coord -> GtkP ()
 eraseNear p = do
   (erased,kept) <- partitionStrokesNear 10 p <$> use stNoteData
-  invalidate $ boxUnion $ map boundingBox erased
+  invalidate $ boundingBox erased
   stRedo %= (erased++)
   stNoteData .= kept
 
@@ -191,7 +191,7 @@ touchProcessDetect time0 touches
        stRender .= do -- show where fingers, to give feedback that the touch gesture is recognized.
          resetMatrix zero
          forM_ touches0 renderFinger
-       invalidateIn zero $ foldr1 unionBox $ map (fingerBox) touches0
+       invalidateIn zero $ boundingBox $ map fingerBox touches0
        rb
        touchProcess msel tr touches
     _ -> case eventSource ev of
@@ -258,7 +258,7 @@ touchProcess selection origTrans touches
      stRender .= return ()
      inv (M.elems touches)
    inv ts = when (not (null ts)) $ do
-     invalidateIn zero $ foldr1 unionBox $ map (fingerBox . inIdMatrix) ts
+     invalidateIn zero $ boundingBox $ map (fingerBox . inIdMatrix) ts
    inIdMatrix = fmap (apply origTrans)
    cont = touchProcess selection origTrans
 

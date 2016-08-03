@@ -23,7 +23,7 @@ renderFinger Finger {fingerCurrent = Coord x y _ _} = do
   Cairo.stroke
 
 fingerBox :: Finger -> Box
-fingerBox = extend 84 . pointBox . fingerCurrent
+fingerBox = extend 84 . boundingBox . fingerCurrent
 
 makeTranslationMatrix :: Translation -> Matrix
 makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
@@ -31,16 +31,6 @@ makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
 
 resetMatrix :: Translation -> Render ()
 resetMatrix = setMatrix . makeTranslationMatrix
-
-{-
-drawEv :: Event -> Render ()
-drawEv ev@Event{eventCoord = Coord x y z t} = do
-    setSourceRGB 0 0 0
-    setLineWidth 2
-    moveTo x y
-    arc x y (2 * z) 0 3
-    stroke
--}
 
 -- | Draw the lasso for a given curve
 drawLasso :: ClosedCurve -> Cairo.Render ()
@@ -116,7 +106,7 @@ renderNoteData cs = do
   Just (G.Rectangle x y w h) <- G.getClipRectangle
   let box = Box (Coord (t x) (t y) 1 0) (Coord (t (x+w)) (t (y+h)) 1 0)
       t = fromIntegral
-      cs' = filter (overlap box . boundingBox) cs
+      cs' = filter (overlapBox box . boundingBox) cs
   forM_ cs' drawStroke
 
 boxRectangle :: Box -> Render ()

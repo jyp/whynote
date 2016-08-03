@@ -2,7 +2,6 @@
 import Graphics.UI.Gtk as Gtk
 import Graphics.Rendering.Cairo
 import Device
-import NoteData
 import Control.Monad.Reader
 import Config
 import Process
@@ -21,7 +20,7 @@ main = do
      (initData,fname) <- case args of
        [] -> do
          time <- getZonedTime
-         return $ (emptyNoteData,(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".wnote")
+         return ([],(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".wnote")
        [fname] -> do
          dat <- loadState fname
          return (dat,fname)
