@@ -328,13 +328,12 @@ menu' a0 p c options = do
        invalidateAll -- TODO optimize
        Event {..} <- waitInTrans zero "menu"
        active <- renderNow $ rMenu False eventCoord
-       -- liftIO $ print active
        case eventType of
          Press -> do
            hideMenu
            case active of
               Just i -> snd (options !! i) eventCoord
-              Nothing -> return ()
+              Nothing -> pushBack zero Event{..}
          _ -> menu' a0 eventCoord c options
 
 penMenu :: [(String, Coord -> GtkP ())]
@@ -404,7 +403,7 @@ selMenuCenter St{..} = apply _stTranslation (intervalHi (selectionBox _stSelecti
 rootMenuCenter :: Coord
 rootMenuCenter = Coord 40 40 0 0
 
-renderAll st@St{..} _msg = do
+renderAll (Process.Wait st@St{..} _msg _k) = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
    resetMatrix  _stTranslation
    renderNoteData _stNoteData
@@ -412,3 +411,4 @@ renderAll st@St{..} _msg = do
    _stRender
    renderMenuRoot "menu" rootMenuCenter
    whenSel $ renderMenuRoot "sel" (selMenuCenter st)
+renderAll _ = return ()

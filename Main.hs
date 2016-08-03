@@ -11,9 +11,7 @@ import App
 import Data.IORef
 import Event
 import Data.Time.LocalTime
--- import System.Locale (defaultTimeLocale)
 import Data.Time.Format
--- import System.Mem
 import Control.Concurrent (forkIO)
 
 
@@ -58,10 +56,8 @@ main = do
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
-         k <- readIORef continuation
-         case k of
-           Wait st msg _ -> renderWithDrawWindow drawin $ renderAll st msg -- TODO: pass the whole continuation to renderAll
-           _ -> return ()
+       k <- readIORef continuation
+       renderWithDrawWindow drawin $ renderAll k
 
      let debugState = do
            cont <- readIORef continuation
