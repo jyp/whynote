@@ -8,11 +8,20 @@ import Process
 import GtkProcess
 import App
 import Data.IORef
-import Event
 import Data.Time.LocalTime
 import Data.Time.Format
-import Control.Concurrent (forkIO)
+import Control.Concurrent
 
+-- | Dedicated process to constently autosave
+saveHandler :: String -> MVar (St,Maybe (MVar ())) -> IO a
+saveHandler fname v = do
+  sem <- newEmptyMVar --ask to be woken up
+  modifyMVar_ v $ \(st,Nothing) -> return (st,Just sem)
+  readMVar sem -- wait for data to save
+  s <- withMVar v (return . fst) -- get the data
+  writeState fname s
+  threadDelay 5000 -- wait some time so we're not bogging the disk
+  saveHandler fname v
 
 main :: IO ()
 main = do
@@ -20,11 +29,14 @@ main = do
      (initData,fname) <- case args of
        [] -> do
          time <- getZonedTime
-         return ([],(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".wnote")
+         return ([],(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".ynote")
        [fname] -> do
          dat <- loadState fname
          return (dat,fname)
-       _ -> error "usage: whynote [file.wnote]"
+       _ -> error "usage: whynote [file.ynote]"
+
+     saveChan <- newMVar (error "saveChan: no value yet",Nothing)
+     saveProcess <- forkIO (saveHandler fname saveChan)
 
      WNConfig devicesCfg <- loadConfig
      window <- windowNew
@@ -61,34 +73,28 @@ main = do
      let debugState = do
            cont <- readIORef continuation
            putStrLn $ "Current state: " ++ show cont
+         killSave s = killThread saveProcess >> writeState fname s
 
      on canvas keyPressEvent $ liftIO $ do
        debugState
        return False
-
-
-     nextSaveTime <- newIORef (0 :: TimeStamp)
      let handleEvent :: EventM t Bool
          handleEvent = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             let t = Event.eventTime ev'
              oldStaleSt <- readIORef staleSt
              let (newStaleSt,freshEvent) = computeStaleTouches ev' oldStaleSt
              writeIORef staleSt newStaleSt
              oldState <- readIORef continuation
              case oldState of
                Done s -> do
-                 writeState fname s
+                 killSave s
                  mainQuit
                Wait s msg _ -> do
-                 putStrLn msg
-                 nextSave <- readIORef nextSaveTime
-                 -- Save the file every second
-                 when (t > nextSave) $ do
-                    _ <- forkIO $ writeState fname s -- FIXME: have a thread in charge of disk.
-                    writeIORef nextSaveTime (t + 5000)
+                 -- putStrLn msg
+                 sem <- modifyMVar saveChan (\(_,sem) -> return ((s,Nothing),sem))
+                 forM_ sem $ \sm -> putMVar sm () -- wakeup the writer if necessary
                  when freshEvent (pushEvent ev')
                _ -> error ("Main: did not expect state: " ++ show oldState)
            return True
@@ -99,7 +105,7 @@ main = do
      on window objectDestroy $ do
        oldState <- readIORef continuation
        case oldState of
-         Wait s _ _ -> writeState fname s
+         Wait s _ _ -> killSave s
          _ -> return ()
        mainQuit
      mainGUI
