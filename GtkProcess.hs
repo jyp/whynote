@@ -52,11 +52,13 @@ initSt dat = St{_stRender = return ()
                }
 
 data StaleSt = StaleSt
- { _stLastTouch   :: Int        -- button number of the latest finger touch
- , _stLastStaleTouch :: Int -- button number of the latest finger touch when stylus was used
+ { _stLastTouch      :: Int -- ^ button number of the latest finger touch
+ , _stLastStaleTouch :: Int -- ^ button number of the latest finger touch when stylus was used
  }
 
--- | Given event and state, compute if a touch event should be kept, and update relevant bookkeeping info.
+-- | Touches occuring after a stylus event are bogus and should be discarded
+-- ('palm rejection'). Given event and state, compute if a touch event should be
+-- kept, and update relevant bookkeeping info.
 computeStaleTouches :: Event -> StaleSt -> (StaleSt,Bool)
 computeStaleTouches Event {..} StaleSt {..}
   | eventSource `elem` [Stylus,Eraser] = (StaleSt {_stLastStaleTouch = _stLastTouch,..},True)
