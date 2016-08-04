@@ -29,7 +29,7 @@ $(makeLenses ''Translation)
 
 
 data St =
-  St { _stRender      :: Render ()
+  St { _stRender      :: Render () -- ^ extra stuff to render
      , _stNoteData    :: NoteData
      , _stRedo        :: [Stroke]
      , _stSelection   :: Selection
