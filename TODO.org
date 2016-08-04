@@ -14,5 +14,84 @@ if some option in the menu is active, then instead of panning/zooming
 one could select text
 ** curve optimisation
 Replace some segments by a single bezier curve.
+
+- For the complete curve, compute a best-fitting cubic curve. Save
+  this curve in the data structure for approximate renderings. Find
+  the point which generates the most error and split the curve there
+  (https://en.wikipedia.org/wiki/Ramer%E2%80%93Douglas%E2%80%93Peucker_algorithm).
+  Recurse.
+
+- When rendering compute the error and scale it.
+
+*** Best-fitting bezier curve
+
+Compute best fit using least-squares approach following:
+http://jimherold.com/2012/04/20/least-squares-bezier-fit/
+
+Assume a 1-dimensional fitting of the curve (since we're minimizing
+squares we can do this independently). 
+
+1. Assume that the curve is given four control points C =
+   [c1..c4]. The curve equation can then be given by B(t) = Q(t)MC where Q(t) = [t^3,t^2,t,1] and M = 
+
+      [-1 3 -3 1
+        3 6  3 0
+       -3 3  0 0
+        1 0  0 0]
+
+2. Assume that the points to approximate will be distributed at
+   parameters T = [t1,..,t_n]. T can be set according to the length of
+   the path. We have timestamps so we should probably just use that,
+   normalized. (Note that 0<=t<=1).
+
+3. Assume that the values of the points are given by the vector X.
+
+4. We can compute the error term Err(C) as the sum of squares of (x_i -
+   B(t_i)). Let Q be the matrix Q[i,n] = t_i^(3-n). The value of the
+   bezier curve at t_i is then B(t_i) = Q[i]MC. The array of errors is thus 
+   E = X-QMC, and the error term is Err(C) = EᵀE.
+
+
+5. The derivative wrt. C gives the gradient of the error in the C
+   space: -2 Qᵀ(X-QMC) [JP: i am suspicious of this term, it looks like it should be:
+   -2 (QM)ᵀ(X-QMC)
+   ] At its zero we find an extremum (which must be
+   a minimum given the definition).
+
+6. Solving -2 Qᵀ(X-QMC) = 0:
+   QᵀX-QᵀQMC = 0
+   QᵀQMC = QᵀX
+   MC = (QᵀQ)⁻¹QᵀX
+   C = M⁻¹(QᵀQ)⁻¹QᵀX
+
+
+7. Or using 'my' expression:
+   Solving -2 (QM)ᵀ(X-QMC) = 0. Let QM 
+   (QM)ᵀX-(QM)ᵀQMC = 0
+   (QM)ᵀQMC = (QM)ᵀX
+   C = ((QM)ᵀQM)⁻¹(QM)ᵀX
+   C = (RᵀR)⁻¹RᵀX where R = QM
+
+   Dimensional analysis:
+
+   matrix : cols×rows
+   Q : 4×n
+   M : 4×4
+   C : 1×4
+   QM : 4×n
+   MC : 1×4
+   QMC : 1×n
+   X : 1×n
+   Qᵀ : n×4
+   QᵀX : 1×4
+   QᵀQ : 4×4
+
+*** Curve offsetting
+http://pomax.github.io/bezierinfo/#graduatedoffset
 ** evaluate use of UNDO
-Perhaps use time-based selection instead?
+Undo is used mainly for wrong:
+  - deletions (sometimes the 2nd button is mistaken as eraser on my device!)
+
+So a regular undo/redo would be better than what we have now.
+** Thumbnailer
+Thumbnailer configs are in /usr/share/thumbnailers (or ~/.local/share/thumbnailers)
