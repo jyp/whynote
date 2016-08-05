@@ -118,20 +118,24 @@ boxRectangle (Box lo hi) =
 type Point = (Double,Double)
 
 menuRootRadius = 40
-menuInnerCircle = 50
+menuInnerCircle = 50 -- FIXME: rename to Radius
 menuOuterCircle = 150
 
-renderMenuRoot :: String -> Coord -> Render ()
-renderMenuRoot t (Coord cx cy _ _) = do
+renderNode  :: String -> Double -> Coord -> Render ()
+renderNode t rad (Coord cx cy _ _) = do
   resetMatrix zero
   Cairo.translate cx cy
-  moveTo menuRootRadius 0
-  arc 0 0 menuRootRadius 0 (2*pi)
+  moveTo rad 0
+  arc 0 0 rad 0 (2*pi)
   setSourceRGBA 1 1 1 1 >> fillPreserve
   setFontSize 15
   TextExtents {textExtentsWidth = w, textExtentsHeight = h} <- textExtents t
   moveTo (-w/2) (h/2)
   setSourceRGBA 0 0 0 1 >> showText t >> stroke
+
+renderMenuRoot :: String -> Coord -> Render ()
+renderMenuRoot t = renderNode t menuRootRadius
+
 
 coordToPt :: Coord -> (Double,Double)
 coordToPt (Coord x y _ _) = (x,y)
