@@ -2,9 +2,9 @@
 
 -----------------------------------------------------------------------------
 -- |
--- Module      : Hoodle.Device 
+-- Module      : Device
 -- Copyright   : (c) 2011-2013 Ian-Woo Kim
--- Copyright   : (c) 2014 JP Bernardy
+-- Copyright   : (c) 2014-2016 JP Bernardy
 --
 
 #include <gtk/gtk.h>
@@ -12,7 +12,7 @@
 
 module Device where
 
-import Control.Applicative 
+import Control.Applicative
 import Control.Monad.Reader
 import qualified Config
 import Data.Int
@@ -35,10 +35,10 @@ data DeviceList = DeviceList { dev_stylus     :: Device
                              , dev_eraser     :: Device
                              , dev_touch      :: Device
                              , dev_mtouch     :: Device
-                             } 
-                deriving Show 
+                             }
+                deriving Show
 
-connect_PTR__BOOL :: 
+connect_PTR__BOOL ::
   GObjectClass obj => SignalName ->
   ConnectAfter -> obj ->
   (Ptr a -> IO Bool) ->
@@ -61,7 +61,7 @@ eventM name eMask after obj fun = do
 touchEvent :: WidgetClass self => Signal self (EventM EAny Bool)
 touchEvent = Signal (eventM "touch_event" [TouchMask])
 
--- | 
+-- |
 foreign import ccall "c_initdevice.h initdevice" c_initdevice
   ::
      Ptr Widget -- ^ widget
@@ -87,8 +87,8 @@ setEventCompression dw x =
   withForeignPtr (unsafeCoerce dw :: ForeignPtr DrawWindow) $ \w ->
     gdk_window_set_event_compression w x
 
--- | 
-initDevice :: Widget -> Config.Devices -> IO DeviceList  
+-- |
+initDevice :: Widget -> Config.Devices -> IO DeviceList
 initDevice widget (Config.Devices{..}) =
   withForeignPtr (unsafeCoerce widget :: ForeignPtr Widget) $ \w ->
     with 0 $ \pstylus ->
@@ -122,9 +122,9 @@ getPointer devlst ptr = do
       if ty `elem` [ #{const GDK_BUTTON_PRESS}
                    , #{const GDK_2BUTTON_PRESS}
                    , #{const GDK_3BUTTON_PRESS}
-                   , #{const GDK_BUTTON_RELEASE}] 
-        then do 
-          (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventButton, x} ptr 
+                   , #{const GDK_BUTTON_RELEASE}]
+        then do
+          (x :: #{gtk2hs_type gdouble}) <- #{peek GdkEventButton, x} ptr
           (y :: #{gtk2hs_type gdouble}) <- #{peek GdkEventButton, y} ptr
           (btn :: #{gtk2hs_type gint}) <- #{peek GdkEventButton, button} ptr
           axis <- #{peek GdkEventButton, axes} ptr
@@ -174,5 +174,3 @@ getPointer devlst ptr = do
           | device == dev_mtouch devlst =
              return $ (MultiTouch,Coord x y 1.0 0)
           | otherwise = return $ (Core,Coord x y 1.0 0)
-
-
