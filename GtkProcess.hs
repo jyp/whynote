@@ -1,4 +1,4 @@
-{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards, GADTs, FlexibleContexts, ScopedTypeVariables #-}
+{-# LANGUAGE RankNTypes, GeneralizedNewtypeDeriving, TemplateHaskell, RecordWildCards, GADTs, FlexibleContexts, ScopedTypeVariables, DeriveFunctor #-}
 module GtkProcess where
 
 import Prelude ()
@@ -77,9 +77,6 @@ translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
 quit :: GtkP ()
 quit = GtkP $ lift $ processDone
 
-waitInTrans :: Translation -> String -> GtkP Event
-waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg
-
 invalidateAll :: GtkP ()
 invalidateAll = do
   Ctx {..} <- ask
@@ -104,6 +101,12 @@ wait :: String -> GtkP Event
 wait msg = do
   tr <- use stTranslation
   waitInTrans tr msg
+
+waitInTrans :: Translation -> String -> GtkP Event
+waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg (const True)
+
+waitOn :: String -> (Event -> Bool) -> GtkP Event
+waitOn = Process.wait
 
 -- | Send a wakeup event in the given about of time. The timestamp of the wakeup
 -- event is based on the timestamp of the input event.

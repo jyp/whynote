@@ -37,6 +37,7 @@ main = do
 
      saveChan <- newMVar (error "saveChan: no value yet",Nothing)
      saveProcess <- forkIO (saveHandler fname saveChan)
+     let killSave s = killThread saveProcess >> writeState fname s
 
      WNConfig devicesCfg <- loadConfig
      window <- windowNew
@@ -49,7 +50,7 @@ main = do
      devices <- initDevice (castToWidget canvas) devicesCfg
      print devices
      containerAdd window canvas
-     widgetModifyBg canvas StateNormal (Gtk.Color 65535 65535 65535)
+     widgetModifyBg canvas StateNormal (Gtk.Color 65535 65535 65535) -- FIXME: does not appear to work, the background is grey
 
      widgetShowAll window
      Just drawin <- widgetGetWindow canvas
@@ -67,13 +68,10 @@ main = do
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
-       k <- readIORef continuation
-       renderWithDrawWindow drawin $ renderAll k
-
+       renderWithDrawWindow drawin . renderAll =<< readIORef continuation
      let debugState = do
            cont <- readIORef continuation
            putStrLn $ "Current state: " ++ show cont
-         killSave s = killThread saveProcess >> writeState fname s
 
      on canvas keyPressEvent $ liftIO $ do
        debugState
@@ -83,15 +81,13 @@ main = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             oldStaleSt <- readIORef staleSt
-             let (newStaleSt,freshEvent) = computeStaleTouches ev' oldStaleSt
-             writeIORef staleSt newStaleSt
+             freshEvent <- atomicModifyIORef' staleSt (computeStaleTouches ev')
              oldState <- readIORef continuation
              case oldState of
                Done s -> do
                  killSave s
                  mainQuit
-               Wait s msg _ -> do
+               Wait s _msg _ _ -> do
                  -- putStrLn msg
                  sem <- modifyMVar saveChan (\(_,sem) -> return ((s,Nothing),sem))
                  forM_ sem $ \sm -> putMVar sm () -- wakeup the writer if necessary
@@ -105,7 +101,7 @@ main = do
      on window objectDestroy $ do
        oldState <- readIORef continuation
        case oldState of
-         Wait s _ _ -> killSave s
+         Wait s _ _ _ -> killSave s
          _ -> return ()
        mainQuit
      mainGUI

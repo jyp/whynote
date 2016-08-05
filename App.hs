@@ -403,7 +403,7 @@ selMenuCenter St{..} = apply _stTranslation (intervalHi (selectionBox _stSelecti
 rootMenuCenter :: Coord
 rootMenuCenter = Coord 40 40 0 0
 
-renderAll (Process.Wait st@St{..} _msg _k) = do
+renderAll (Process.Wait st@St{..} _msg _ _k) = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
    resetMatrix  _stTranslation
    renderNoteData _stNoteData
