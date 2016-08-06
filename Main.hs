@@ -71,7 +71,7 @@ main = do
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
-       renderWithDrawWindow drawin . renderAll . fst =<< readIORef continuation
+       renderWithDrawWindow drawin . renderAll ctx . fst =<< readIORef continuation
      let debugState = do
            (_,cont) <- readIORef continuation
            putStrLn $ "Current state: " ++ show cont
@@ -82,9 +82,7 @@ main = do
      let handleEvent :: EventM t Bool
          handleEvent = do
            ev <- ask
-           liftIO $ do
-             ev' <- getPointer devices ev
-             pushEvent ev'
+           liftIO (pushEvent =<< getPointer devices ev)
            return True
 
      on canvas touchEvent handleEvent

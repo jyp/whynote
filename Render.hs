@@ -121,20 +121,21 @@ menuRootRadius = 40
 menuInnerCircle = 50 -- FIXME: rename to Radius
 menuOuterCircle = 150
 
-renderNode  :: String -> Double -> Coord -> Render ()
-renderNode t rad (Coord cx cy _ _) = do
+renderNode  :: Bool -> String -> Double -> Coord -> Render ()
+renderNode active t rad (Coord cx cy _ _) = do
   resetMatrix zero
   Cairo.translate cx cy
   moveTo rad 0
   arc 0 0 rad 0 (2*pi)
-  setSourceRGBA 1 1 1 1 >> fillPreserve
+  if active then  setSourceRGBA 0.5 0.5 1 1 else setSourceRGBA 1 1 1 1
+  fillPreserve
   setFontSize 15
   TextExtents {textExtentsWidth = w, textExtentsHeight = h} <- textExtents t
   moveTo (-w/2) (h/2)
   setSourceRGBA 0 0 0 1 >> showText t >> stroke
 
 renderMenuRoot :: String -> Coord -> Render ()
-renderMenuRoot t = renderNode t menuRootRadius
+renderMenuRoot t = renderNode False t menuRootRadius
 
 
 coordToPt :: Coord -> (Double,Double)

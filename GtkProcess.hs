@@ -27,15 +27,15 @@ data Ctx
 $(makeLenses ''Ctx)
 $(makeLenses ''Translation)
 
-data SoftButton = Erase
+data SoftButton = Erase deriving (Eq,Show)
 data St =
-  St { _stRender      :: Render () -- ^ extra stuff to render
-     , _stNoteData    :: NoteData
-     , _stRedo        :: [Stroke]
-     , _stSelection   :: Selection
-     , _stTranslation :: Translation -- currently applied transformation of the logical canvas
-     , _stPen         :: PenOptions -- current pen
-     , _stButtons     :: [SoftButton]
+  St { _stRender      :: !(Render ()) -- ^ extra stuff to render
+     , _stNoteData    :: !NoteData
+     , _stRedo        :: ![Stroke]
+     , _stSelection   :: !Selection
+     , _stTranslation :: !Translation -- currently applied transformation of the logical canvas
+     , _stPen         :: !PenOptions -- current pen
+     , _stButtons     :: ![SoftButton]
      }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
@@ -50,6 +50,7 @@ initSt dat = St{_stRender = return ()
                ,_stTranslation = Translation 1 0 0
                ,_stRedo = []
                ,_stPen = defaultPen
+               ,_stButtons = []
                }
 
 -- | Touches occuring after a stylus event are bogus and should be discarded
