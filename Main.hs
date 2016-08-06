@@ -58,19 +58,22 @@ main = do
      continuation <- newIORef (error "DO NOT ACCESS INITIAL CONTI")
      let pushEvent ev = do
            oldState <- readIORef continuation
-           newState <- resume oldState ev
-           writeIORef continuation newState
+           (s,newCont) <- resume oldState ev
+           case newCont of
+             Done -> killSave s >> mainQuit
+             _ -> do sem <- modifyMVar saveChan (\(_,sem) -> return ((s,Nothing),sem))
+                     forM_ sem $ \sm -> putMVar sm () -- wakeup the writer if necessary
+                     writeIORef continuation (s,newCont)
          ctx = Ctx drawin canvas pushEvent
-     setup <- exec (runGtkP ctx (initSt initData) mainProcess)
+     setup <- exec (initSt initData,runGtkP ctx whynote)
      writeIORef continuation setup
-     staleSt <- newIORef initStaleSt
 
      widgetAddEvents canvas [PointerMotionMask, TouchMask]
 
      on canvas draw $ liftIO $ do
-       renderWithDrawWindow drawin . renderAll =<< readIORef continuation
+       renderWithDrawWindow drawin . renderAll . fst =<< readIORef continuation
      let debugState = do
-           cont <- readIORef continuation
+           (_,cont) <- readIORef continuation
            putStrLn $ "Current state: " ++ show cont
 
      on canvas keyPressEvent $ liftIO $ do
@@ -81,27 +84,14 @@ main = do
            ev <- ask
            liftIO $ do
              ev' <- getPointer devices ev
-             freshEvent <- atomicModifyIORef' staleSt (computeStaleTouches ev')
-             oldState <- readIORef continuation
-             case oldState of
-               Done s -> do
-                 killSave s
-                 mainQuit
-               Wait s _msg _ _ -> do
-                 -- putStrLn msg
-                 sem <- modifyMVar saveChan (\(_,sem) -> return ((s,Nothing),sem))
-                 forM_ sem $ \sm -> putMVar sm () -- wakeup the writer if necessary
-                 when freshEvent (pushEvent ev')
-               _ -> error ("Main: did not expect state: " ++ show oldState)
+             pushEvent ev'
            return True
 
      on canvas touchEvent handleEvent
      on canvas motionNotifyEvent handleEvent
      on canvas buttonPressEvent handleEvent
      on window objectDestroy $ do
-       oldState <- readIORef continuation
-       case oldState of
-         Wait s _ _ _ -> killSave s
-         _ -> return ()
+       (s,_) <- readIORef continuation
+       killSave s
        mainQuit
      mainGUI

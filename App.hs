@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, FlexibleContexts #-}
+{-# LANGUAGE RecordWildCards, FlexibleContexts, DeriveFunctor #-}
 module App where
 import Control.Lens hiding (transform)
 import Control.Monad
@@ -324,7 +324,7 @@ menu' a0 p c options = do
      then hideMenu
      else do
        let rMenu sho p' = renderMenu sho a0 p' c $ map fst options
-       stRender .= do active <- rMenu True p ; liftIO$print active; return ()
+       stRender .= do active <- rMenu True p ; return ()
        invalidateAll -- TODO optimize
        Event {..} <- waitInTrans zero "menu"
        active <- renderNow $ rMenu False eventCoord
@@ -403,7 +403,7 @@ selMenuCenter St{..} = apply _stTranslation (intervalHi (selectionBox _stSelecti
 rootMenuCenter :: Coord
 rootMenuCenter = Coord 40 40 0 0
 
-renderAll (Process.Wait st@St{..} _msg _ _k) = do
+renderAll st@St{..} = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
    resetMatrix  _stTranslation
    renderNoteData _stNoteData
@@ -411,4 +411,44 @@ renderAll (Process.Wait st@St{..} _msg _ _k) = do
    _stRender
    renderMenuRoot "menu" rootMenuCenter
    whenSel $ renderMenuRoot "sel" (selMenuCenter st)
-renderAll _ = return ()
+
+whynote = do
+ Process.forkHandler (palmRejection (-1) (-1))
+ mainProcess
+
+{-----------------------
+-- Soft buttons
+
+data Button' a = Button SoftButton String Double a deriving Functor
+type Button = Button' Coord
+
+softButtons = [Button Erase "erase" 50 (Coord (-40) (-50) 0 0)]
+
+shiftBySz :: (Int,Int) -> Coord -> Coord
+shiftBySz (w,h) Coord {..} = Coord {coordX = coordX + fromIntegral w,
+                                    coordY = coordY + fromIntegral h,..}
+
+-- renderSoftButtons :: Ctx -> St -> Render ()
+renderSoftButtons ctx St {..}= do
+  sz <- liftIO (getWinSize ctx)
+  forM_ (map (fmap (shiftBySz sz)) softButtons) $ \(Button _ txt rad c) ->
+    renderNode txt rad c
+
+touchWaitForRelease btn touchNumber = do
+  ev <- Process.wait (\Event{..} -> eventSource == MultiTouch &&
+                                    eventButton == touchNumber)
+  case eventType ev of
+    End -> stButtons %= filter (/= btn)
+    _ -> touchWaitForRelease btn touchNumber
+loop x = x >> loop x
+softButtonHandler (Button softBtn txt rad c) = loop $ do
+  ctx <- use (to id)
+  sz <- liftIO (getWinSize ctx)
+  let c' = shiftBySz sz c
+  ev <- Process.wait (\Event{..} -> eventSource == MultiTouch &&
+                                    eventType == Begin &&
+                                    dist c' eventCoord < rad)
+                     ("btn: " ++ txt)
+  stButtons %= (softBtn:)
+  Process.forkHandler (touchWaitForRelease softBtn eventButton)
+-}

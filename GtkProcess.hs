@@ -27,7 +27,7 @@ data Ctx
 $(makeLenses ''Ctx)
 $(makeLenses ''Translation)
 
-
+data SoftButton = Erase
 data St =
   St { _stRender      :: Render () -- ^ extra stuff to render
      , _stNoteData    :: NoteData
@@ -35,6 +35,7 @@ data St =
      , _stSelection   :: Selection
      , _stTranslation :: Translation -- currently applied transformation of the logical canvas
      , _stPen         :: PenOptions -- current pen
+     , _stButtons     :: [SoftButton]
      }
 
 newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
@@ -51,25 +52,23 @@ initSt dat = St{_stRender = return ()
                ,_stPen = defaultPen
                }
 
-data StaleSt = StaleSt
- { _stLastTouch      :: Int -- ^ button number of the latest finger touch
- , _stLastStaleTouch :: Int -- ^ button number of the latest finger touch when stylus was used
- }
-
 -- | Touches occuring after a stylus event are bogus and should be discarded
--- ('palm rejection'). Given event and state, compute if a touch event should be
--- kept, and update relevant bookkeeping info.
-computeStaleTouches :: Event -> StaleSt -> (StaleSt,Bool)
-computeStaleTouches Event {..} StaleSt {..}
-  | eventSource `elem` [Stylus,Eraser] = (StaleSt {_stLastStaleTouch = _stLastTouch,..},True)
-  | eventSource == MultiTouch = (StaleSt{_stLastTouch = max eventButton _stLastTouch,..},eventButton > _stLastStaleTouch)
-  | otherwise = (StaleSt{..},True)
+-- ('palm rejection').
+palmRejection :: Int -> Int -> GtkP ()
+palmRejection lastTouch lastStaleTouch = do
+  e@Event{..} <- waitInTrans zero "stylus reject touch"
+  case () of
+    _ | eventSource `elem` [Stylus,Eraser] -> do
+          Process.pushBack e
+          palmRejection lastTouch lastTouch
+    _ | eventSource == MultiTouch -> do
+          when (eventButton > lastStaleTouch) (Process.pushBack e)
+          palmRejection (max eventButton lastTouch) lastStaleTouch
+    _ -> Process.pushBack e >> palmRejection lastTouch lastStaleTouch
 
-initStaleSt :: StaleSt
-initStaleSt = StaleSt {_stLastTouch = -1 ,_stLastStaleTouch = -1}
 
-runGtkP :: Ctx -> St -> GtkP a -> Process St Event
-runGtkP ctx st (GtkP p) = run st (runReaderT p ctx)
+runGtkP :: Ctx -> GtkP a -> Process St Event
+runGtkP ctx (GtkP p) = run (runReaderT p ctx)
 
 translateEvent :: Translation -> Event -> Event
 translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
@@ -114,7 +113,6 @@ wakeup :: Event -> Word32 -> GtkP ()
 wakeup ev msec = do
   handleEvent <- view eventHandler
   _ <- liftIO $ flip Gtk.timeoutAdd (fromIntegral msec) $ do
-    putStrLn "WAKE UP!"
     handleEvent Event {eventCoord = (eventCoord ev) {coordT = eventTime ev + fromIntegral (msec)},
                        eventSource = Timeout,
                        eventButton = 0,
@@ -138,3 +136,6 @@ renderNow :: Render a -> GtkP a
 renderNow r = do
   dw <- view ctxDrawWindow
   liftIO $ Gtk.renderWithDrawWindow dw r
+
+getWinSize :: Ctx -> IO (Int,Int)
+getWinSize Ctx {..} = (,) <$> (Gtk.drawWindowGetWidth _ctxDrawWindow) <*> (Gtk.drawWindowGetHeight _ctxDrawWindow)
