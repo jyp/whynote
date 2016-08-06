@@ -28,6 +28,7 @@ executable whynote
   build-depends: vector >= 0.10
   build-depends: old-locale
   build-depends: unordered-containers
+  build-depends: QuickCheck
 
   main-is: Main.hs
   other-modules: Device

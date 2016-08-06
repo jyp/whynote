@@ -1,6 +1,6 @@
 { mkDerivation, aeson, base, bytestring, cairo, configurator
-, containers, glib, gtk3, lens, mtl, old-locale, stdenv, time
-, transformers, unordered-containers, vector, yap
+, containers, gasp, glib, gtk3, lens, mtl, old-locale, QuickCheck
+, stdenv, time, transformers, unordered-containers, vector
 }:
 mkDerivation {
   pname = "whynote";
@@ -8,9 +8,10 @@ mkDerivation {
   src = ./.;
   isLibrary = false;
   isExecutable = true;
-  buildDepends = [
-    aeson base bytestring cairo configurator containers glib gtk3 lens
-    mtl old-locale time transformers unordered-containers vector yap
+  executableHaskellDepends = [
+    aeson base bytestring cairo configurator containers gasp glib gtk3
+    lens mtl old-locale QuickCheck time transformers
+    unordered-containers vector
   ];
   description = "A minimal note-taking program";
   license = stdenv.lib.licenses.gpl3;
