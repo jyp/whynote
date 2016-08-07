@@ -1,10 +1,61 @@
-{-#LANGUAGE RecordWildCards, LambdaCase, TemplateHaskell, ScopedTypeVariables #-}
+{-#LANGUAGE RecordWildCards, LambdaCase, TemplateHaskell, ScopedTypeVariables, DeriveFunctor,DeriveFoldable #-}
 
 module QuadTree where
+import Prelude ()
+import WNPrelude
 import Data.Ratio
 import Test.QuickCheck
 import Data.Monoid
-data Q a = Empty | Quad [a] (Q a) (Q a) (Q a) (Q a)
+import Data.Word
+
+infty :: Double
+infty = 1/0
+
+class Lattice a where
+  (\/),(/\) :: a -> a -> a
+  bottom,top :: a
+
+data Coord = Coord { coordX :: !Double
+                   , coordY :: !Double
+                   , coordZ :: !Double -- pressure (> 0). Note that scaling gives pressures > 1.
+                   , coordT :: !Word32
+                   }
+           deriving (Show,Eq,Ord)
+
+instance Additive Coord where
+  Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2) (t1+t2)
+  zero = Coord 0 0 0 0
+instance AbelianAdditive Coord
+instance Group Coord where
+  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
+instance Lattice Coord where
+  (Coord x1 y1 z1 t1) \/ (Coord x2 y2 z2 t2) = Coord (max x1 x2) (max y1 y2)(max z1 z2)(max t1 t2)
+  c1 /\ c2 = negate ((negate c1) \/ (negate c2))
+  bottom = Coord infty infty infty maxBound
+  top = Coord (-infty) (-infty) (-infty) minBound
+
+instance Lattice a => Lattice (Interval a) where
+  (Box l1 h1) \/ (Box l2 h2) = Box (l1 /\ l2) (h1 \/ h2)
+  (Box l1 h1) /\ (Box l2 h2) = Box (l1 \/ l2) (h1 /\ h2)
+  bottom = Box top bottom
+  top = Box bottom top
+
+
+
+data Interval a = Box {intervalLo :: !a, intervalHi :: !a} deriving (Functor,Foldable)
+instance Applicative Interval where
+  pure x = Box x x
+  Box f g <*> Box x y = Box (f x) (g y)
+type Box = Interval Coord
+
+data Boxed' f a = Boxed (Interval a) (f a) deriving Functor
+type Boxed f = Boxed' f Coord
+
+class HasBox a where
+  boundingBox :: a -> Box
+
+
+data Q a = Empty | Quad [a] (Q a) (Q a) (Q a) (Q a) deriving (Functor,Foldable)
 
 data Quadrant = NW | NE | SE | SW deriving (Show,Eq)
 instance Arbitrary Quadrant where arbitrary = elements quadrants
@@ -16,6 +67,9 @@ type QuadTree a = (Extent,Q a)
 
 type Number = Rational
 data Extent = Extent {extentX :: Number, extentY :: Number, extentSize :: Number} deriving (Show,Eq)
+extentBox e = Box (Coord (fromRational (extentX e)) (fromRational (extentY e)) 0 0)
+                  (Coord (fromRational (extentX' e)) (fromRational (extentY' e)) 0 0)
+
 instance Arbitrary Extent where
   arbitrary = do
     n :: Integer <- arbitrary
@@ -63,41 +117,41 @@ superExtent Extent {extentX = x, extentY = y, extentSize = sz} = (quadrant, Exte
 prop_sub_super e = let (q,e1) = superExtent e in subExtent e1 q == e
 prop_super_sub q e = superExtent (subExtent e q) == (q,e)
 
-contains :: Extent -> Extent -> Bool
-Extent x0 y0 sz0 `contains` Extent x1 y1 sz1 = x1 >= x0 && y1 >= y0 && x1+sz1 <= x0+sz0 && y1+sz1 <= y0+sz0
+
+contains :: Box -> Box -> Bool
+b1 `contains` b2 = (b1 /\ b2) `eqBox` b2
+eqBox b1 b2 = all zeroCoord ((-) <$> b2 <*> b1)
+zeroCoord (Coord x y _ _) = x == 0 && y == 0
 
 -- | Insert in a quad tree of the given extent (does not create 'bigger' quadtree).
-insert' :: (a,Extent) -> Extent -> Q a -> Q a
+insert' :: (a,Box) -> Extent -> Q a -> Q a
 insert' (a,ex) ex0 q = case moveToChild of
   (quadrant,subEx):_ -> update (insert' (a,ex) subEx) quadrant q
   [] -> case q of
     Empty -> Quad [a] Empty Empty Empty Empty
     Quad as q1 q2 q3 q4 -> Quad (a:as) q1 q2 q3 q4
-  where moveToChild = [(quadrant,subEx) | quadrant <- quadrants, let subEx = subExtent ex0 quadrant, subEx `contains` ex]
+  where moveToChild = [(quadrant,subEx) | quadrant <- quadrants, let subEx = subExtent ex0 quadrant, extentBox subEx `contains` ex]
 
-insert :: (a,Extent) -> QuadTree a -> QuadTree a
-insert (x,ext) (ex0,q) | ex0 `contains` ext = (ext,insert' (x,ext) ex0 q)
-                       | otherwise = insert (x,ext) (ex1,update (\_ -> q) quadrant Empty)
+insert :: HasBox a => a -> QuadTree a -> QuadTree a
+insert x (ex0,q) | extentBox ex0 `contains` ext = (ex0,insert' (x,ext) ex0 q)
+                 | otherwise = insert x (ex1,update (\_ -> q) quadrant Empty)
   where (quadrant,ex1) = superExtent ex0
+        ext = boundingBox x
 
-overlaps :: Extent -> Extent -> Bool
-overlaps e1 e2 = max (extentX e1) (extentX e2) < min (extentX' e1) (extentX' e2) &&
-                 max (extentY e1) (extentY e2) < min (extentY' e1) (extentY' e2)
+qfilter :: HasBox a => Box -> QuadTree a -> QuadTree a
+qfilter ext qt = (fst qt,qfilter' ext qt)
 
-qfilter :: Extent -> QuadTree a -> QuadTree a
-qfilter ext qt = (ext,qfilter' ext qt)
+overlapBox :: Box -> Box -> Bool
+overlapBox b1 b2 = not $ nilBox $ b1 /\ b2
+  where nilBox (Box (Coord x0 y0 _ _) (Coord x1 y1 _ _)) = (x0 >= x1) || (y0 >= y1)
 
-qfilter' :: Extent -> QuadTree a -> Q a
+qfilter' :: HasBox a => Box -> QuadTree a -> Q a
 qfilter' ext (ex0,Empty) = Empty
 qfilter' ext (ex0,q)
-  | ext `contains` ex0 = q
-  | overlaps ext ex0 = update' id {- FIXME: filter! -} f q
+  | ext `contains` extentBox ex0 = q
+  | overlapBox ext (extentBox ex0) = update' (filter (overlapBox ext . boundingBox)) {- FIXME: filter! -} f q
   | otherwise = Empty
      where f quadrant q' = qfilter' ext (subExtent ex0 quadrant,q')
-
-instance Foldable Q where
-  foldMap f Empty = mempty
-  foldMap f (Quad as qa qb qc qd) = foldMap f as <> foldMap f qa <>foldMap f qb <>foldMap f qc <> foldMap f qd
 
 subQ q Empty = Empty
 subQ NW (Quad _ q _ _ _) = q
@@ -118,8 +172,6 @@ quad [] Empty Empty Empty Empty = Empty
 quad as a b c d = Quad as a b c d
 
 
-prop_c1 :: Extent -> Extent -> Property
-prop_c1 a b = a `contains` b ==> a `overlaps` b
 
 empty :: Extent -> QuadTree a
 empty ex = (ex,Empty)
