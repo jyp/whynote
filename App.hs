@@ -348,12 +348,12 @@ whynote = do
  mapM_ (Process.forkHandler . softButtonHandler) softButtons
  Process.forkHandler (palmRejection (-1) (-1))
  loop $ do
-  st <- use (to id)
   ev <- wait "top-level"
+  st <- use (to id)
   sel <- use stSelection
   tr <- use stTranslation
-  let pressure = coordZ$ eventCoord $ ev
-      havePressure = pressure > 0.01
+  let pressure = coordZ (eventCoord ev)
+      havePressure = pressure > 0
       haveSel = not . isEmptySelection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
       evOrig = apply tr (eventCoord ev)
@@ -367,6 +367,15 @@ whynote = do
                         redos <- use stRedo
                         undoProcess c (redos,dones))
                    ,("Quit",menu 0 [("Confirm",\_ -> quit)])]) rootMenuCenter
+    Event {..} | (Erase `elem` _stButtons st || eventSource == Eraser) && (havePressure || eventType == Press) -> do
+      if haveSel
+        then do if inSel
+                  then deleteSelection
+                  else deselect
+                waitForRelease eventSource
+        else do
+          eraseNear eventCoord
+          eraseProcess eventSource
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || eventModifiers == 256 -> do
       if haveSel
         then if inSel
@@ -375,18 +384,6 @@ whynote = do
                   deselect
                   waitForRelease Stylus
         else stroke eventCoord
-    Event {eventSource = Eraser,..} | coordZ eventCoord > 0.01 || eventType == Press -> do
-      if haveSel
-        then if inSel
-                then do
-                  deleteSelection
-                  waitForRelease Eraser
-                else do
-                  deselect
-                  waitForRelease Eraser
-        else do
-          eraseNear (eventCoord)
-          eraseProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=512,..} | havePressure  -> do
       lassoProcess (eventSource ev)
     Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
