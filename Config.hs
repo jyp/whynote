@@ -16,7 +16,7 @@ lkString cfg s = lookupDefault (fromString s) cfg (fromString s)
 loadConfig :: IO WNConfig
 loadConfig = do
   cfg <- load [Required "$(HOME)/.whynote"]
-  
+
   WNConfig <$> (Devices
            <$> lkString cfg "device.touch"
            <*> lkString cfg "device.multitouch"
@@ -28,6 +28,9 @@ redColor = mkColor 220 50 47
 blueColor = mkColor 38 139 210
 greenColor = mkColor 65 133 153
 highlightColor = Color 1 1 0 0.5
+
+defaultPen :: PenOptions
+defaultPen = PenOptions 1 blackColor 1
 
 configuredPens = [("default", defaultPen),
                   ("red", PenOptions 1 redColor 1),

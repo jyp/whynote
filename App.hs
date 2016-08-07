@@ -91,7 +91,7 @@ selectNear p = do
   stNoteData .= kept
 
 fuzzyFactor :: GtkP Double
-fuzzyFactor = (10 /) <$> use (stTranslation.trZoom)
+fuzzyFactor = use (stTranslation.trZoom.to (10 /))
 
 setSelection :: Selection -> GtkP ()
 setSelection sel = do
@@ -158,7 +158,7 @@ fingerAdd coord (Just Finger{..}) = Just Finger {fingerCurrent=coord,..}
 
 avg x y = average [x,y]
 average :: [Coord] -> Coord
-average xs = scale (1/fromIntegral (length xs)) (foldr (+) zero xs)
+average xs = ((1::Double)/fromIntegral (length xs)) *^ (foldr (+) zero xs)
 
 norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
@@ -275,7 +275,7 @@ transSheet origTrans a0 a1 factor = do
 -- | Translate and zoom the selection by the given amount.
 transSel :: Selection -> Coord -> Coord -> Double -> GtkP ()
 transSel origSel a0 a1 factor = do
-  let (Coord dx dy _ _) = a1 - scale factor a0
+  let (Coord dx dy _ _) = a1 - factor *^ a0
   setSelection (fmap (apply (Translation factor dx dy)) origSel)
 
 moveSelWithPen :: Selection -> Coord -> GtkP ()
@@ -343,8 +343,11 @@ penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
 -- 256 mouse 1
 -- 512 mouse 2 (mid)
 -- 1024 mouse 3 (right)
-mainProcess :: GtkP ()
-mainProcess = do
+whynote :: GtkP ()
+whynote = do
+ mapM_ (Process.forkHandler . softButtonHandler) softButtons
+ Process.forkHandler (palmRejection (-1) (-1))
+ loop $ do
   st <- use (to id)
   ev <- wait "top-level"
   sel <- use stSelection
@@ -394,7 +397,6 @@ mainProcess = do
       when (eventType ev == Begin) $ do
         touchProcessEntry ev
     _ -> return ()
-  mainProcess
 
 
 selMenuCenter :: St -> Coord
@@ -413,10 +415,6 @@ renderAll ctx st@St{..} = do
    renderMenuRoot "menu" rootMenuCenter
    whenSel $ renderMenuRoot "sel" (selMenuCenter st)
 
-whynote = do
- mapM_ (Process.forkHandler . softButtonHandler) softButtons
- Process.forkHandler (palmRejection (-1) (-1))
- mainProcess
 
 ----------------------
 -- Soft buttons

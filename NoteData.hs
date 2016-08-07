@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleContexts, DeriveFunctor, DeriveFoldable, OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes #-}
+{-# LANGUAGE FlexibleContexts, DeriveFunctor, DeriveFoldable, OverloadedStrings, GeneralizedNewtypeDeriving, TypeSynonymInstances, FlexibleInstances, NamedFieldPuns, RecordWildCards, RankNTypes, MultiParamTypeClasses #-}
 module NoteData where
 import Prelude ()
 import WNPrelude
@@ -11,7 +11,7 @@ import qualified Data.Vector as V
 
 data Coord = Coord { coordX :: !Double
                    , coordY :: !Double
-                   , coordZ :: !Double -- pressure
+                   , coordZ :: !Double -- pressure (> 0). Note that scaling gives pressures > 1.
                    , coordT :: !Word32
                    }
            deriving (Show,Eq,Ord)
@@ -23,11 +23,7 @@ type Finger = Finger' Coord
 blackColor :: Color
 blackColor = Color 0 0 0 1
 
-defaultPen :: PenOptions
-defaultPen = PenOptions 1 blackColor 1
-
-data Color = Color !Double !Double !Double !Double
-
+data Color = Color {colorRed, colorGreen, colorBlue, colorAlpha :: !Double}
 
 data PenOptions =
   PenOptions
@@ -36,17 +32,15 @@ data PenOptions =
   ,_penSensitivity :: Double -- in range [0,1]
   }
 
-instance Group Coord where
-  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
 
-instance AbelianAdditive Coord where
 instance Additive Coord where
   Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2) (t1+t2)
   zero = Coord 0 0 0 0
-
-scale :: Double -> Coord -> Coord
-scale f = \(Coord x y z t) -> Coord (s x) (s y) (s z) t
- where s = (f *)
+instance AbelianAdditive Coord
+instance Group Coord where
+  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
+instance Module Double Coord where
+  f *^ (Coord x y z t) = Coord (f*x) (f*y) (f*z) t
 
 xy :: forall t. Coord -> (Double -> Double -> t) -> t
 xy (Coord x y _ _) f  = f x y
@@ -134,7 +128,8 @@ data Stroke' a = Stroke PenOptions (Boxed' Curve' a)
   deriving Functor
 type Stroke = Stroke' Coord
 instance HasBox Stroke where
-  boundingBox (Stroke PenOptions {_penWidth} x) = extend _penWidth $ boundingBox x
+  boundingBox (Stroke PenOptions {_penWidth} x) = extend (z * _penWidth) bbox
+    where bbox@(Box _ (Coord _ _ z _)) = boundingBox x
 instance Area Stroke where
   inArea p (Stroke _ x) = inArea p x
   nearArea d p (Stroke _ x) = nearArea d p x

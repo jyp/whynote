@@ -15,8 +15,10 @@ import Event
 import NoteData
 import Render
 import File
+import Config
 
 $(makeLenses ''PenOptions)
+$(makeLenses ''Translation)
 
 data Ctx
   = Ctx { _ctxDrawWindow :: Gtk.DrawWindow
@@ -25,7 +27,6 @@ data Ctx
         }
 
 $(makeLenses ''Ctx)
-$(makeLenses ''Translation)
 
 data SoftButton = Erase deriving (Eq,Show)
 data St =
