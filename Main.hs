@@ -13,15 +13,17 @@ import Data.Time.Format
 import Control.Concurrent
 
 -- | Dedicated process to constently autosave
-saveHandler :: String -> MVar (St,Maybe (MVar ())) -> IO a
-saveHandler fname v = do
-  sem <- newEmptyMVar --ask to be woken up
-  modifyMVar_ v $ \(st,Nothing) -> return (st,Just sem)
-  readMVar sem -- wait for data to save
-  s <- withMVar v (return . fst) -- get the data
-  writeState fname s
+saveTicker ::  MVar Bool -> IO a
+saveTicker ck = loop $ do
   threadDelay 5000 -- wait some time so we're not bogging the disk
-  saveHandler fname v
+  putMVar ck True
+
+saveHandler :: String -> MVar Bool -> MVar (Maybe St) -> IO ()
+saveHandler fname ck st = do
+  continue <- takeMVar ck -- wait for data to save
+  s <- withMVar st return  -- get the data
+  case s of Just x -> writeState fname x; _ -> return ()
+  when continue $ saveHandler fname ck st
 
 main :: IO ()
 main = do
@@ -35,9 +37,12 @@ main = do
          return (dat,fname)
        _ -> error "usage: whynote [file.ynote]"
 
-     saveChan <- newMVar (error "saveChan: no value yet",Nothing)
-     saveProcess <- forkIO (saveHandler fname saveChan)
-     let killSave s = killThread saveProcess >> writeState fname s
+     saveChan <- newMVar Nothing
+     ck <- newEmptyMVar
+     _ <- forkIO (saveHandler fname ck saveChan)
+     tickProcess <- forkIO (saveTicker ck)
+     let setState s = modifyMVar_ saveChan (\_ -> return (Just s))
+         killSave s = killThread tickProcess >> setState s >> putMVar ck False
 
      WNConfig devicesCfg <- loadConfig
      window <- windowNew
@@ -61,8 +66,7 @@ main = do
            (s,newCont) <- resume oldState ev
            case newCont of
              Done -> killSave s >> mainQuit
-             _ -> do sem <- modifyMVar saveChan (\(_,sem) -> return ((s,Nothing),sem))
-                     forM_ sem $ \sm -> putMVar sm () -- wakeup the writer if necessary
+             _ -> do setState s
                      writeIORef continuation (s,newCont)
          ctx = Ctx drawin canvas pushEvent
      setup <- exec (initSt initData,runGtkP ctx whynote)
