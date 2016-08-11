@@ -125,7 +125,7 @@ neighbourhoodProcessLoop source action = do
   case source `elem` [Stylus, Eraser] of
     False -> neighbourhoodProcessLoop source action -- ignore non-pen events
     True -> case eventSource ev == source of
-      False -> Process.pushBack ev -- quick switch between pen/eraser
+      False -> Process.recycle ev -- quick switch between pen/eraser
       True -> case ev of
         Event {..} | eventType == Event.Release
                    || eventModifiers == 0
@@ -178,7 +178,7 @@ touchProcessDetect time0 touches
   ev <- wait ("multi-touch startup " ++ show (M.keys touches))
   wakeup ev 70
   tr <- use stTranslation
-  let rb = pushBack tr ev
+  let rb = recycle tr ev
   case time0 of
     Just t0 | (eventTime ev > t0 + 50) && (M.size touches `elem` [1,2]) -> do
        -- fingers stable, run next phase.
@@ -217,7 +217,7 @@ touchProcess selection origTrans touches
   | M.null touches = exit
   | otherwise = do
   ev <- waitInTrans origTrans "multi-touch"
-  let rb = do pushBack origTrans ev
+  let rb = do recycle origTrans ev
               stTranslation .= origTrans
               exit
   case eventSource ev of
@@ -333,14 +333,14 @@ menu' a0 p c options = do
            hideMenu
            case active of
               Just i -> snd (options !! i) eventCoord
-              Nothing -> pushBack zero Event{..}
+              Nothing -> recycle zero Event{..}
          _ -> menu' a0 eventCoord c options
 
 penMenu :: [(String, Coord -> GtkP ())]
 penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
 
 -- 1: shift
--- 256 mouse 1
+-- 256 mouse 1 or touch
 -- 512 mouse 2 (mid)
 -- 1024 mouse 3 (right)
 whynote :: GtkP ()
@@ -357,6 +357,7 @@ whynote = do
       haveSel = not . isEmptySelection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
       evOrig = apply tr (eventCoord ev)
+  -- liftIO $ print ev
   case ev of
     Event {eventSource = Stylus,..} | haveSel, dist evOrig (selMenuCenter st) < menuRootRadius ->
       menu (pi/4) [("Delete",\_ -> deleteSelection)] (selMenuCenter st)
@@ -367,7 +368,8 @@ whynote = do
                         redos <- use stRedo
                         undoProcess c (redos,dones))
                    ,("Quit",menu 0 [("Confirm",\_ -> quit)])]) rootMenuCenter
-    Event {..} | (Erase `elem` _stButtons st || eventSource == Eraser) && (havePressure || eventType == Press) -> do
+    Event {..} | (eventSource == Eraser && (havePressure || eventType == Press))
+              || (eventSource == Stylus && (Erase `elem` _stButtons st) && (eventButton == 1 && eventType == Press)) -> do
       if haveSel
         then do if inSel
                   then deleteSelection
@@ -376,7 +378,7 @@ whynote = do
         else do
           eraseNear eventCoord
           eraseProcess eventSource
-    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) || eventModifiers == 256 -> do
+    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) -> do
       if haveSel
         then if inSel
                 then moveSelWithPen sel eventCoord
@@ -411,7 +413,6 @@ renderAll ctx st@St{..} = do
    renderSoftButtons ctx st
    renderMenuRoot "menu" rootMenuCenter
    whenSel $ renderMenuRoot "sel" (selMenuCenter st)
-
 
 ----------------------
 -- Soft buttons
@@ -450,4 +451,4 @@ softButtonHandler (Button softBtn txt rad c) = loop $ do
     then do stButtons %= (softBtn:)
             invalidateAll
             Process.forkHandler (touchWaitForRelease softBtn eventButton)
-    else Process.pushBack Event{..}
+    else do Process.reject Event{..} -- not for us after all

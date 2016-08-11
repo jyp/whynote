@@ -61,12 +61,12 @@ palmRejection lastTouch lastStaleTouch = do
   e@Event{..} <- waitInTrans zero "stylus reject touch"
   case () of
     _ | eventSource `elem` [Stylus,Eraser] -> do
-          Process.pushBack e
+          reject e -- note: rejected by rejecton process means available for the rest
           palmRejection lastTouch lastTouch
     _ | eventSource == MultiTouch -> do
-          when (eventButton > lastStaleTouch) (Process.pushBack e)
+          when (eventButton > lastStaleTouch) (reject e)
           palmRejection (max eventButton lastTouch) lastStaleTouch
-    _ -> Process.pushBack e >> palmRejection lastTouch lastStaleTouch
+    _ -> reject e >> palmRejection lastTouch lastStaleTouch
 
 
 runGtkP :: Ctx -> GtkP a -> Process St Event
@@ -123,8 +123,8 @@ wakeup ev msec = do
     return False
   return ()
 
-pushBack :: Translation -> Event -> GtkP ()
-pushBack tr ev = Process.pushBack (translateEvent tr ev)
+recycle :: Translation -> Event -> GtkP ()
+recycle tr ev = Process.recycle (translateEvent tr ev)
 
 writeState :: String -> St -> IO ()
 writeState fname St {..} = writeNote fname (NoteFile _stNoteData)
