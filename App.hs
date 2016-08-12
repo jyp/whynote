@@ -324,17 +324,17 @@ menu' a0 p c options = do
      then hideMenu
      else do
        let rMenu sho p' = renderMenu sho a0 p' c $ map fst options
-       stRender .= do active <- rMenu True p ; return ()
+       stRender .= do _active <- rMenu True p ; return ()
        invalidateAll -- TODO optimize
        Event {..} <- waitInTrans zero "menu"
        active <- renderNow $ rMenu False eventCoord
-       case eventType of
-         Press -> do
+       if eventType == Press || eventType == Begin
+       then do
            hideMenu
            case active of
               Just i -> snd (options !! i) eventCoord
               Nothing -> recycle zero Event{..}
-         _ -> menu' a0 eventCoord c options
+       else menu' a0 eventCoord c options
 
 penMenu :: [(String, Coord -> GtkP ())]
 penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
@@ -359,9 +359,11 @@ whynote = do
       evOrig = apply tr (eventCoord ev)
   -- liftIO $ print ev
   case ev of
-    Event {eventSource = Stylus,..} | haveSel, dist evOrig (selMenuCenter st) < menuRootRadius ->
+    Event {..} | eventSource == Stylus || (eventSource == MultiTouch && eventType == Begin),
+                 haveSel, dist evOrig (selMenuCenter st) < menuRootRadius ->
       menu (pi/4) [("Delete",\_ -> deleteSelection)] (selMenuCenter st)
-    Event {eventSource = Stylus,..} | dist evOrig rootMenuCenter < menuRootRadius -> do
+    Event {..} | eventSource == Stylus || (eventSource == MultiTouch && eventType == Begin),
+                 dist evOrig rootMenuCenter < menuRootRadius -> do
       menu (pi/4) ([("Pen",menu 0 penMenu)
                    ,("Undo",\c -> do
                         dones <- use stNoteData
