@@ -81,8 +81,9 @@ strokePath (PenOptions {..}) (Curve c)
     V.foldM_ forward plast rxs
   where turn (x,y) = (negate y,x)
         norm (x,y) = sqrt (x*x + y*y)
-        sentitiveWidth = _penWidth * _penSensitivity
-        constWidth = _penWidth * (1 - _penSensitivity)
+        penWidth = boxWidth _penShape
+        sentitiveWidth = penWidth * _penSensitivity
+        constWidth = penWidth * (1 - _penSensitivity)
         (x1,y1) .-. (x0,y0) = (x1-x0 , y1-y0)
         (x1,y1) .+. (x0,y0) = (x1+x0 , y1+y0)
         z *. (x0,y0) = (z * x0 , z * y0)

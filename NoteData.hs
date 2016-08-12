@@ -25,12 +25,15 @@ blackColor = Color 0 0 0 1
 
 data Color = Color {colorRed, colorGreen, colorBlue, colorAlpha :: !Double}
 
-data PenOptions =
+boxWidth (Box l h) = coordX (h-l)
+mkPenWidth x = Box zero zero {coordX = x}
+type PenOptions = PenOptions' Coord
+data PenOptions' a =
   PenOptions
-  {_penWidth :: Double
+  {_penShape :: Interval a -- this is a difference of coordinates, so that when a stroke is scaled, the pen shape is scaled too.
   ,_penColor :: Color
   ,_penSensitivity :: Double -- in range [0,1]
-  }
+  } deriving Functor
 
 
 instance Additive Coord where
@@ -106,7 +109,7 @@ instance Area Box where
 data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
 
 apply :: Translation -> Coord -> Coord
-apply (Translation zz dx dy) (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) (z*zz) t
+apply (Translation zz dx dy) (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) z t
 
 instance Additive Translation where
   (+) (Translation z1 dx1 dy1) (Translation z2 dx2 dy2) = Translation (z1*z2) (dx1 + z1*dx2) (dy1 + z1*dy2)
@@ -124,11 +127,11 @@ type Curve = Curve' Coord
 newtype ClosedCurve' a = Closed (V.Vector a)
   deriving (Functor,HasBox)
 type ClosedCurve = ClosedCurve' Coord
-data Stroke' a = Stroke PenOptions (Boxed' Curve' a)
+data Stroke' a = Stroke (PenOptions' a) (Boxed' Curve' a)
   deriving Functor
 type Stroke = Stroke' Coord
 instance HasBox Stroke where
-  boundingBox (Stroke PenOptions {_penWidth} x) = extend (z * _penWidth) bbox
+  boundingBox (Stroke pen x) = extend (z * boxWidth (_penShape pen)) bbox
     where bbox@(Box _ (Coord _ _ z _)) = boundingBox x
 instance Area Stroke where
   inArea p (Stroke _ x) = inArea p x
@@ -220,12 +223,12 @@ instance FromJSON Stroke where
 
 instance FromJSON PenOptions where
   parseJSON = withObject "PenOptions" $ \v ->
-    PenOptions <$> ((v .:? "width") .!= 1)
+    PenOptions <$> (mkPenWidth <$> ((v .:? "width") .!= 1))
                <*> ((v .:? "color") .!= blackColor)
                <*> ((v .:? "sensitivity") .!= 1)
 
 instance ToJSON PenOptions where
-  toJSON (PenOptions w c s) = object ["width" .= w,"color" .= c, "sensitivity" .= s]
+  toJSON (PenOptions w c s) = object ["width" .= boxWidth w,"color" .= c, "sensitivity" .= s]
 
 instance FromJSON Color where
   parseJSON = withObject "color" $ \v -> Color <$> v.:"r" <*> v.:"g" <*> v.:"b" <*> v.:"a"

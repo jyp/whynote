@@ -17,7 +17,7 @@ import Render
 import File
 import Config
 
-$(makeLenses ''PenOptions)
+$(makeLenses ''PenOptions')
 $(makeLenses ''Translation)
 
 data Ctx

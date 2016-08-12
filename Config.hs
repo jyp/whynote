@@ -3,7 +3,6 @@ module Config (loadConfig, WNConfig(..),Devices(..),defaultPen,configuredPens) w
 
 import Data.Configurator.Types
 import Data.Configurator as Conf
-import Control.Applicative
 import Data.String
 import NoteData
 
@@ -30,9 +29,9 @@ greenColor = mkColor 65 133 153
 highlightColor = Color 1 1 0 0.5
 
 defaultPen :: PenOptions
-defaultPen = PenOptions 1 blackColor 1
+defaultPen = PenOptions (mkPenWidth 1) blackColor 1
 
 configuredPens = [("default", defaultPen),
-                  ("red", PenOptions 1 redColor 1),
-                  ("green", PenOptions 1 greenColor 1),
-                  ("hilighter",PenOptions 20 highlightColor 0.2)]
+                  ("red", PenOptions (mkPenWidth 1) redColor 1),
+                  ("green", PenOptions (mkPenWidth 1) greenColor 1),
+                  ("hilighter",PenOptions (mkPenWidth 20) highlightColor 0.2)]
