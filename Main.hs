@@ -15,7 +15,7 @@ import Control.Concurrent
 -- | Dedicated process to constently autosave
 saveTicker ::  MVar Bool -> IO a
 saveTicker ck = loop $ do
-  threadDelay 5000 -- wait some time so we're not bogging the disk
+  threadDelay 5000000 -- wait some time so we're not bogging the disk (μsec)
   putMVar ck True
 
 saveHandler :: String -> MVar Bool -> MVar (Maybe St) -> IO ()
