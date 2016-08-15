@@ -21,7 +21,7 @@ mkStroke cs = do
 
 strokeLoop :: [Coord] -> GtkP [Coord]
 strokeLoop c = do
-  old <- mkStroke c
+  old <- mkStroke $ reverse c -- FIXME: slow!
   stRender .= drawStroke old
   invalidate $ boundingBox $ old
   ev <- wait "next stroke point"
@@ -434,6 +434,7 @@ renderSoftButtons ctx St {..}= do
   forM_ (map (fmap (shiftBySz sz)) softButtons) $ \(Button btn txt rad c) ->
     renderNode (btn `elem` _stButtons) txt rad c
 
+touchWaitForRelease :: SoftButton -> Int -> GtkP ()
 touchWaitForRelease btn touchNumber = do
   ev <- waitOn "btn release" (\Event{..} -> eventSource == MultiTouch &&
                                             eventButton == touchNumber)
@@ -442,6 +443,8 @@ touchWaitForRelease btn touchNumber = do
       stButtons %= filter (/= btn)
       invalidateAll
     _ -> touchWaitForRelease btn touchNumber
+
+loop :: Monad m => m a -> m b
 loop x = x >> loop x
 
 softButtonHandler (Button softBtn txt rad c) = loop $ do

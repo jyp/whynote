@@ -29,6 +29,7 @@ executable whynote
   build-depends: old-locale
   build-depends: unordered-containers
   build-depends: QuickCheck
+  build-depends: matrix
 
   main-is: Main.hs
   other-modules: Device

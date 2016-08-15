@@ -121,7 +121,7 @@ instance Group Translation where
 
 data Interval a = Box {intervalLo :: !a, intervalHi :: !a} deriving Functor
 type Box = Interval Coord
-newtype Curve' a = Curve (V.Vector a)
+newtype Curve' a = Curve {fromCurve :: V.Vector a}
   deriving (Functor,HasBox)
 type Curve = Curve' Coord
 newtype ClosedCurve' a = Closed (V.Vector a)
