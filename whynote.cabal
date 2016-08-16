@@ -32,7 +32,19 @@ executable whynote
   build-depends: matrix
 
   main-is: Main.hs
-  other-modules: Device
+  other-modules:
+     Device
+     App
+     Config
+     CurveApprox
+     Event
+     File
+     GtkProcess
+     NoteData
+     Process
+     Render
+     WNPrelude
+
   cc-options:      -Wno-pointer-to-int-cast -std=gnu99 -DDEBUG  -fPIC
   ghc-options: -rtsopts -threaded
   install-includes:
