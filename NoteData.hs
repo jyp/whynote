@@ -87,7 +87,7 @@ instance HasBox a => HasBox [a] where
   boundingBox = foldl' (\/) top . map boundingBox
 
 instance HasBox a => HasBox (V.Vector a) where
-  boundingBox = boundingBox . V.toList
+  boundingBox = boundingBox . toList
 
 instance HasBox Coord where
   boundingBox c = Box c c
@@ -158,19 +158,19 @@ vrot xs = V.tail xs <>  V.singleton (V.head xs)
 
 instance Area ClosedCurve where
   inArea p (Closed v) =
-    if V.null v
+    if null v
        then False
        else odd winding
     where qs = fmap (quadrant . (\p' -> p' - p)) v
           dqs = V.zipWith diffQuadr qs (vrot qs)
-          winding = V.sum dqs `div` 4
+          winding = sum dqs `div` 4
 
 strokeInArea :: Area a => Stroke -> a -> Bool
-(Stroke _ (Boxed _ (Curve s1))) `strokeInArea` s2 = V.all (`inArea` s2) s1
+(Stroke _ (Boxed _ (Curve s1))) `strokeInArea` s2 = all (`inArea` s2) s1
 
 instance Area Curve where
   inArea _ _ = False
-  nearArea d p (Curve ps) = V.any (nearArea d p) ps
+  nearArea d p (Curve ps) = any (nearArea d p) ps
 
 lassoPartitionStrokes :: Boxed ClosedCurve' -> [Stroke] -> ([Stroke],[Stroke])
 lassoPartitionStrokes strk = partition (`strokeInArea` strk)
