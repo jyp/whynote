@@ -72,14 +72,15 @@ drawStrokeSelected (Stroke opts (Boxed _ c)) = do
 
 approxCurve :: Curve -> Cairo.Render ()
 approxCurve (Curve c) = when (V.length c >= 4) $ do
-  Cairo.setSourceRGBA 0.5 0.5 0.5 1
+  setLineWidth 0.2
+  Cairo.setSourceRGBA 1 0.2 0.2 1
   moveTo x0 y0
   curveTo x1 y1 x2 y2 x3 y3
   stroke
   where [Coord x0 y0 z0 0,
          Coord x1 y1 z1 1,
          Coord x2 y2 z2 2,
-         Coord x3 y3 z3 3] = approxControlPoints c
+         Coord x3 y3 z3 3] = fst (approxControlPoints' c)
 
 strokePath :: PenOptions -> Curve -> Cairo.Render ()
 strokePath (PenOptions {..}) (Curve c)
@@ -116,13 +117,15 @@ strokePath (PenOptions {..}) (Curve c)
                P.uncurry Cairo.lineTo $ shift .+. p1
                return pc1
 
-renderNoteData :: NoteData -> Render ()
-renderNoteData cs = do
-  Just (G.Rectangle x y w h) <- G.getClipRectangle
+clipNoteData :: NoteData -> Render NoteData
+clipNoteData cs = do
+  Just r@(G.Rectangle x y w h) <- G.getClipRectangle
+  liftIO $ putStrLn $ "CLIP RECT = " ++ show r
   let box = Box (Coord (t x) (t y) 1 0) (Coord (t (x+w)) (t (y+h)) 1 0)
       t = fromIntegral
-      cs' = filter (overlapBox box . boundingBox) cs
-  forM_ cs' drawStroke
+  return (filter (overlapBox box . boundingBox) cs)
+
+renderNoteData n = mapM_ drawStroke =<< clipNoteData n
 
 boxRectangle :: Box -> Render ()
 boxRectangle (Box lo hi) =
@@ -225,4 +228,4 @@ renderSelection (Selection bbox cs) = do
   setSourceRGBA 0 0 1 0.5
   fill
   restore
-  forM_ cs drawStrokeSelected
+  mapM_ drawStrokeSelected =<< clipNoteData cs
