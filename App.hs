@@ -189,7 +189,6 @@ touchProcessDetect time0 touches
                   else Nothing
        let touches0 = fmap (fmap (apply tr)) (M.elems touches)
        stRender .= do -- show where fingers, to give feedback that the touch gesture is recognized.
-         resetMatrix zero
          forM_ touches0 renderFinger
        invalidateIn zero $ boundingBox $ map fingerBox touches0
        rb
@@ -236,7 +235,6 @@ touchProcess selection origTrans touches
                     a1 = average ps1
 
                 stRender .= do
-                  resetMatrix zero -- to have constant size rendering of fingers.
                   forM_ (M.elems  touches') (renderFinger . inIdMatrix)
 
                 inv (M.elems touches' ++ M.elems touches)
@@ -406,11 +404,10 @@ selMenuCenter St{..} = apply _stTranslation (intervalHi (selectionBox _stSelecti
 rootMenuCenter :: Coord
 rootMenuCenter = Coord 40 40 0 0
 
-renderAll ctx st@St{..} = do
+renderAll ctx st@St{_stTranslation = tr,..} = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
-   resetMatrix  _stTranslation
-   renderNoteData _stNoteData
-   whenSel $ renderSelection _stSelection
+   renderNoteData ((apply tr <$>) <$> _stNoteData)
+   whenSel $ renderSelection (apply tr <$> _stSelection)
    _stRender
    renderSoftButtons ctx st
    renderMenuRoot "menu" rootMenuCenter

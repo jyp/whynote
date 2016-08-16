@@ -26,13 +26,6 @@ renderFinger Finger {fingerCurrent = Coord x y _ _} = do
 fingerBox :: Finger -> Box
 fingerBox = extend 84 . boundingBox . fingerCurrent
 
-makeTranslationMatrix :: Translation -> Matrix
-makeTranslationMatrix (Translation z dx dy) = Matrix z 0 0 z dx dy
-
-
-resetMatrix :: Translation -> Render ()
-resetMatrix = setMatrix . makeTranslationMatrix
-
 -- | Draw the lasso for a given curve
 drawLasso :: ClosedCurve -> Cairo.Render ()
 drawLasso (Closed c)
@@ -140,8 +133,7 @@ menuInnerCircle = 50 -- FIXME: rename to Radius
 menuOuterCircle = 150
 
 renderNode  :: Bool -> String -> Double -> Coord -> Render ()
-renderNode active t rad (Coord cx cy _ _) = do
-  resetMatrix zero
+renderNode active t rad (Coord cx cy _ _) = saveEx $ do
   Cairo.translate cx cy
   moveTo rad 0
   arc 0 0 rad 0 (2*pi)
@@ -192,7 +184,6 @@ renderDial doRender theta (x,y) (cx,cy) dx inner outer n txts = saveEx $ do
       shift = theta + pi*fromIntegral (length txts)/(fromIntegral n)
       daIn = dx/inner
       daOut = dx/outer
-  identityMatrix
   Cairo.translate cx cy
   actives <- forM (zip3 txts angles (rot angles)) $ \(t,a0,a1) -> do
      newPath
