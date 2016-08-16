@@ -13,17 +13,19 @@ import Data.Time.Format
 import Control.Concurrent
 
 -- | Dedicated process to constently autosave
-saveTicker ::  MVar Bool -> IO a
+saveTicker ::  MVar (Maybe b)-> IO a
 saveTicker ck = loop $ do
   threadDelay 5000000 -- wait some time so we're not bogging the disk (μsec)
-  putMVar ck True
+  putMVar ck Nothing
 
-saveHandler :: String -> MVar Bool -> MVar (Maybe St) -> IO ()
+saveHandler :: String -> MVar (Maybe (MVar ())) -> MVar (Maybe St) -> IO ()
 saveHandler fname ck st = do
-  continue <- takeMVar ck -- wait for data to save
+  stop <- takeMVar ck -- wait for data to save
   s <- withMVar st return  -- get the data
   case s of Just x -> writeState fname x; _ -> return ()
-  when continue $ saveHandler fname ck st
+  case stop of
+    Nothing -> saveHandler fname ck st
+    Just done -> putMVar done ()
 
 main :: IO ()
 main = do
@@ -42,7 +44,11 @@ main = do
      _ <- forkIO (saveHandler fname ck saveChan)
      tickProcess <- forkIO (saveTicker ck)
      let setState s = modifyMVar_ saveChan (\_ -> return (Just s))
-         killSave s = killThread tickProcess >> setState s >> putMVar ck False
+         killSave s = do killThread tickProcess
+                         setState s
+                         done <- newEmptyMVar
+                         putMVar ck (Just done)
+                         takeMVar done
 
      WNConfig devicesCfg <- loadConfig
      window <- windowNew
