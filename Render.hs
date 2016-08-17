@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE RecordWildCards,ViewPatterns #-}
 module Render where
 
 import qualified Prelude as P
@@ -16,7 +16,7 @@ import CurveApprox
 
 -- | For debugging multitouch events.
 renderFinger :: Finger -> Render ()
-renderFinger Finger {fingerCurrent = Coord x y _ _} = do
+renderFinger Finger {fingerCurrent = Coord x y _ _} = saveEx $ do
   Cairo.setSourceRGBA 0 0 0 0.7
   setLineWidth 3
   moveTo x y
@@ -111,12 +111,11 @@ strokePath (PenOptions {..}) (Curve c)
                return pc1
 
 clipNoteData :: NoteData -> Render NoteData
-clipNoteData cs = do
-  Just r@(G.Rectangle x y w h) <- G.getClipRectangle
-  liftIO $ putStrLn $ "CLIP RECT = " ++ show r
-  let box = Box (Coord (t x) (t y) 1 0) (Coord (t (x+w)) (t (y+h)) 1 0)
-      t = fromIntegral
+clipNoteData cs = saveEx $ do
+  Just r@(G.Rectangle (t->x) (t->y) (t->w) (t->h)) <- G.getClipRectangle
+  let box = Box (Coord x y 1 0) (Coord (x+w) (y+h) 1 0)
   return (filter (overlapBox box . boundingBox) cs)
+  where       t = fromIntegral
 
 renderNoteData n = mapM_ drawStroke =<< clipNoteData n
 

@@ -21,8 +21,9 @@ mkStroke cs = do
 
 strokeLoop :: [Coord] -> GtkP [Coord]
 strokeLoop c = do
+  tr <- use stTranslation
   old <- mkStroke $ reverse c -- FIXME: slow!
-  stRender .= drawStroke old
+  stRender .= drawStroke (apply tr <$> old)
   invalidate $ boundingBox $ old
   ev <- wait "next stroke point"
   let cs' = (eventCoord ev:c)
@@ -47,8 +48,9 @@ stroke c0 = do
 
 lassoProcessLoop :: Source -> [Coord] -> GtkP ClosedCurve
 lassoProcessLoop source c = do
+  tr <- use stTranslation
   let res = Closed $ V.fromList c
-  stRender .= drawLasso res
+  stRender .= drawLasso (apply tr <$> res)
   invalidate $ boundingBox c
   ev <- wait "next lasso point"
   case eventSource ev == source of
