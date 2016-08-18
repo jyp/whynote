@@ -26,6 +26,7 @@ blackColor = Color 0 0 0 1
 data Color = Color {colorRed, colorGreen, colorBlue, colorAlpha :: !Double}
 
 boxWidth (Box l h) = coordX (h-l)
+boxHeight (Box l h) = coordY (h-l)
 mkPenWidth x = Box zero zero {coordX = x}
 type PenOptions = PenOptions' Coord
 data PenOptions' a =

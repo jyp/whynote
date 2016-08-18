@@ -10,6 +10,28 @@ maintainer:     jeanphilippe.bernardy@gmail.com
 Cabal-Version:  >= 1.18
 build-type:     Simple
 
+executable y02svg
+  default-language: Haskell2010
+  build-depends: base>=4
+  build-depends: glib
+  build-depends: cairo
+  build-depends: configurator
+  build-depends: transformers
+  build-depends: lens
+  build-depends: aeson >= 0.7
+  build-depends: containers >= 0.5
+  build-depends: gasp
+  build-depends: time >= 1.4
+  build-depends: bytestring >= 0.10
+  build-depends: vector >= 0.10
+  build-depends: old-locale
+  build-depends: unordered-containers
+  build-depends: matrix
+  build-depends: gtk3
+  build-depends: mtl >= 2
+
+  main-is: Y02SVG.hs
+  
 executable whynote
   default-language: Haskell2010
   build-depends: base>=4
