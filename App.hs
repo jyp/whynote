@@ -56,14 +56,13 @@ lassoProcessLoop source c = do
   case eventSource ev == source of
     False -> lassoProcessLoop source c -- ignore events from another source
     True -> case ev of
-      Event {eventType  = Event.Release} -> return res
-      Event {eventModifiers = 0} -> return res -- motion without any pressed key
+      Event {..} | eventType == Event.Release || eventModifiers == 0 || coordZ (eventCoord) == 0 -> return res
       _ -> lassoProcessLoop source (eventCoord ev:c)
 
 deselect :: GtkP ()
 deselect = do
   (Selection _ oldSel) <- use stSelection
-  stNoteData %= (oldSel++)
+  stNoteData %= (oldSel ++)
   setSelection emptySelection
 
 lassoProcess :: Source -> GtkP ()
@@ -74,6 +73,7 @@ lassoProcess source = do
   (inside,outside) <- lassoPartitionStrokes (box bounds) <$> use stNoteData
   setSelection (mkSelection inside)
   stNoteData .= outside
+  liftIO $ putStrLn $ "rah: " ++ show (boundingBox bounds)
   invalidate $ boundingBox bounds
   return ()
 
@@ -370,6 +370,14 @@ whynote = do
                         redos <- use stRedo
                         undoProcess c (redos,dones))
                    ,("Quit",menu 0 [("Confirm",\_ -> quit)])]) rootMenuCenter
+    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1), _stButtons st == [] -> do
+      if haveSel
+        then if inSel
+                then moveSelWithPen sel eventCoord
+                else do
+                  deselect
+                  waitForRelease Stylus
+        else stroke eventCoord
     Event {..} | (eventSource == Eraser && (havePressure || eventType == Press))
               || (eventSource == Stylus && (Erase `elem` _stButtons st) && (eventButton == 1 && eventType == Press)) -> do
       if haveSel
@@ -380,17 +388,11 @@ whynote = do
         else do
           eraseNear eventCoord
           eraseProcess eventSource
-    Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1) -> do
-      if haveSel
-        then if inSel
-                then moveSelWithPen sel eventCoord
-                else do
-                  deselect
-                  waitForRelease Stylus
-        else stroke eventCoord
-    Event {eventSource = Stylus,eventModifiers=512,..} | havePressure  -> do
+    Event {eventSource = Stylus,..} | (eventModifiers==512) && havePressure
+      || ((Lasso `elem` _stButtons st) && (eventButton == 1 && eventType == Press)) -> do
       lassoProcess (eventSource ev)
-    Event {eventSource = Stylus,eventModifiers=1024,..} | havePressure  -> do
+    Event {eventSource = Stylus,..} | (eventModifiers==1024) && havePressure
+      || ((Select `elem` _stButtons st) && (eventButton == 1 && eventType == Press)) -> do
       if inSel
         then deSelectProcess (eventSource ev)
         else selectProcess (eventSource ev)
@@ -421,7 +423,10 @@ renderAll ctx st@St{_stTranslation = tr,..} = do
 data Button' a = Button SoftButton String Double a deriving Functor
 type Button = Button' Coord
 
-softButtons = [Button Erase "erase" 50 (Coord (-40) (-50) 0 0)]
+softButtons = [Button Erase  "erase"  50 (Coord (-40) ( -50) 0 0)
+              ,Button Lasso  "lasso"  50 (Coord (-40) (-160) 0 0)
+              ,Button Select "select" 50 (Coord (-40) (-270) 0 0)
+              ]
 
 shiftBySz :: (Int,Int) -> Coord -> Coord
 shiftBySz (w,h) Coord {..} = Coord {coordX = coordX + fromIntegral w,
@@ -442,9 +447,6 @@ touchWaitForRelease btn touchNumber = do
       stButtons %= filter (/= btn)
       invalidateAll
     _ -> touchWaitForRelease btn touchNumber
-
-loop :: Monad m => m a -> m b
-loop x = x >> loop x
 
 softButtonHandler (Button softBtn txt rad c) = loop $ do
   ctx <- view (to id)

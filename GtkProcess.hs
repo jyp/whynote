@@ -28,7 +28,7 @@ data Ctx
 
 $(makeLenses ''Ctx)
 
-data SoftButton = Erase deriving (Eq,Show)
+data SoftButton = Erase | Lasso | Select deriving (Eq,Show)
 data St =
   St { _stRender      :: !(Render ()) -- ^ extra stuff to render
      , _stNoteData    :: !NoteData
