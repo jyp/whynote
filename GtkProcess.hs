@@ -141,3 +141,6 @@ renderNow r = do
 
 getWinSize :: Ctx -> IO (Int,Int)
 getWinSize Ctx {..} = (,) <$> (Gtk.drawWindowGetWidth _ctxDrawWindow) <*> (Gtk.drawWindowGetHeight _ctxDrawWindow)
+
+loop :: Monad m => m a -> m b
+loop x = x >> loop x
