@@ -33,11 +33,11 @@ main = do
      (initData,fname) <- case args of
        [] -> do
          time <- getZonedTime
-         return ([],(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".ynote")
+         return ([],(formatTime defaultTimeLocale "%y%m%d-%H%M" time) ++ ".y0")
        [fname] -> do
          dat <- loadState fname
          return (dat,fname)
-       _ -> error "usage: whynote [file.ynote]"
+       _ -> error "usage: whynote [file.y0]"
 
      saveChan <- newMVar Nothing
      ck <- newEmptyMVar
