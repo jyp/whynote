@@ -225,23 +225,19 @@ touchProcess selection origTrans touches
       _ | eventType ev `elem` [Update] -> do
                 let touches' = M.alter (fingerAdd (eventCoord ev)) (eventButton ev) touches
                     pss = (apply (negate origTrans) <$>) <$> M.elems touches'
-                    ps0 = map fingerStart pss
-                    ps1 = map fingerCurrent pss
-                    s0 = peri ps0
-                    s1 = peri ps1
-                    factor = (s1 / (s0+1)) -- FIXME: +1 is not nice here
-                    a0 = average ps0
-                    a1 = average ps1
+                    points = (<$> pss) <$> [fingerStart,fingerCurrent]
+                    [a0,a1] = map average points
+                    [s0,s1] = map peri points
+                    factor = case length pss of 1 -> 1
+                                                2 -> s1 / (s0+1) -- FIXME: +1 is not nice here
+                    dil = Dilation factor (a1 - factor *^ a0)
 
-                stRender .= forM_ (M.elems  touches') renderFinger -- fixme: auto system for invasetting/resetting render
-
+                stRender .= forM_ (M.elems touches') renderFinger -- fixme: auto system for setting/resetting render
                 inv (M.elems touches' ++ M.elems touches)
-                case (length pss,selection) of
-                  (1,Just sel) -> transSel sel a0 a1 1
-                  (2,Just sel) -> transSel sel a0 a1 factor
-                  (1,Nothing) -> transSheet origTrans a0 a1 1
-                  (2,Nothing) -> transSheet origTrans a0 a1 factor
-                  _ -> exit
+                case selection of
+                  Just sel -> transSel sel dil
+                  Nothing -> do stDilation .= origTrans + dil
+                                invalidateAll
                 cont touches'
       _ -> cont touches
     Stylus -> rb
@@ -250,24 +246,14 @@ touchProcess selection origTrans touches
     _ -> do liftIO $ putStrLn $ "event from" ++ show (eventSource ev)
             cont touches
  where
-   exit = do
-     stRender .= return ()
-     inv (M.elems touches)
+   exit = do stRender .= return ()
+             inv (M.elems touches)
    inv ts = when (not (null ts)) $ do
      invalidate $ boundingBox $ map fingerBox ts
    cont = touchProcess selection origTrans
 
--- | Translate and zoom the whole sheet by the given amount.
-transSheet :: Dilation -> Coord -> Coord -> Double -> GtkP ()
-transSheet origTrans a0 a1 z1 = do
-  let Dilation z0 d0 = origTrans
-  stDilation .= Dilation z1 (d0 + z0 *^ a1 - z1 *^ a0)
-  invalidateAll
-
--- | Translate and zoom the selection by the given amount.
-transSel :: Selection -> Coord -> Coord -> Double -> GtkP ()
-transSel origSel a0 a1 factor = do
-  setSelection (fmap (apply (Dilation factor (a1 - factor *^ a0))) origSel)
+transSel :: Selection -> Dilation -> GtkP ()
+transSel origSel dil = setSelection ((apply dil) <$> origSel)
 
 moveSelWithPen :: Selection -> Coord -> GtkP ()
 moveSelWithPen origSel origCoord = do
@@ -277,7 +263,7 @@ moveSelWithPen origSel origCoord = do
       Event {eventType  = Event.Release} -> return ()
       Event {eventModifiers = 0} -> return () -- motion without any pressed key
       _ -> do
-        transSel origSel origCoord (eventCoord ev) 1
+        transSel origSel (Dilation 1 (eventCoord ev - origCoord ))
         moveSelWithPen origSel origCoord
     _ -> do moveSelWithPen origSel origCoord -- ignore events from another source
 
