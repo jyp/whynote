@@ -18,7 +18,7 @@ import File
 import Config
 
 $(makeLenses ''PenOptions')
-$(makeLenses ''Translation)
+$(makeLenses ''Dilation)
 
 data Ctx
   = Ctx { _ctxDrawWindow :: Gtk.DrawWindow
@@ -34,7 +34,7 @@ data St =
      , _stNoteData    :: !NoteData
      , _stRedo        :: ![Stroke]
      , _stSelection   :: !Selection
-     , _stTranslation :: !Translation -- currently applied transformation of the logical canvas
+     , _stDilation :: !Dilation -- currently applied transformation of the logical canvas
      , _stPen         :: !PenOptions -- current pen
      , _stButtons     :: ![SoftButton]
      }
@@ -48,7 +48,7 @@ initSt :: NoteData -> St
 initSt dat = St{_stRender = return ()
                ,_stNoteData = dat
                ,_stSelection = emptySelection
-               ,_stTranslation = Translation 1 0 0
+               ,_stDilation = zero
                ,_stRedo = []
                ,_stPen = defaultPen
                ,_stButtons = []
@@ -72,7 +72,7 @@ palmRejection lastTouch lastStaleTouch = do
 runGtkP :: Ctx -> GtkP a -> Process St Event
 runGtkP ctx (GtkP p) = run (runReaderT p ctx)
 
-translateEvent :: Translation -> Event -> Event
+translateEvent :: Dilation -> Event -> Event
 translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
 
 quit :: GtkP ()
@@ -95,10 +95,10 @@ invalidate b0 = do
 
 wait :: String -> GtkP Event
 wait msg = do
-  tr <- use stTranslation
+  tr <- use stDilation
   waitInTrans tr msg
 
-waitInTrans :: Translation -> String -> GtkP Event
+waitInTrans :: Dilation -> String -> GtkP Event
 waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg (const True)
 
 waitOn :: String -> (Event -> Bool) -> GtkP Event

@@ -44,7 +44,7 @@ instance AbelianAdditive Coord
 instance Group Coord where
   Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
 instance Module Double Coord where
-  f *^ (Coord x y z t) = Coord (f*x) (f*y) (f*z) t
+  f *^ (Coord x y z t) = Coord (f*x) (f*y) z t
 
 xy :: forall t. Coord -> (Double -> Double -> t) -> t
 xy (Coord x y _ _) f  = f x y
@@ -106,18 +106,17 @@ instance Area Box where
     p1 `xy` \x1 y1 -> p2 `xy` \x2 y2 -> x1 <= x && x <= x2 && y1 <= y && y <= y2
   nearArea d p b = inArea p (extend d b)
 
--- FIXME: rename to 'dilation'
-data Translation = Translation {_trZoom, _trDX, _trDY :: Double} -- FIXME: replace coords by Coord
+data Dilation = Dilation {_trZoom :: Double, _trDelta :: Coord}
 
-apply :: Translation -> Coord -> Coord
-apply (Translation zz dx dy) (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) z t
+apply :: Dilation -> Coord -> Coord
+apply (Dilation zz d) c = zz *^ c + d
 
-instance Additive Translation where
-  (+) (Translation z1 dx1 dy1) (Translation z2 dx2 dy2) = Translation (z1*z2) (dx1 + z1*dx2) (dy1 + z1*dy2)
-  zero = Translation 1 0 0
-instance Group Translation where
-  negate (Translation zz dx dy) = Translation f (- f*dx) (- f*dy)
-    where f = 1/zz
+instance Additive Dilation where
+  (+) (Dilation z1 d1) (Dilation z2 d2) = Dilation (z1*z2) (d1 + z1*^d2)
+  zero = Dilation 1 zero
+instance Group Dilation where
+  negate (Dilation z d) = Dilation f (negate (f*^d))
+    where f = 1/z
 
 
 data Interval a = Box {intervalLo :: !a, intervalHi :: !a} deriving (Functor,Show)

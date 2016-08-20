@@ -14,9 +14,9 @@ main = do
   case args of
     [input,output,read -> w, read -> h] -> do
       noteData <- loadState input
-      let bbox@(Box (Coord x0 y0 _ _) _) = boundingBox noteData
+      let bbox@(Box l _) = boundingBox noteData
           factor = max (boxWidth bbox / w) (boxHeight bbox / h)
-          tr = negate (Translation factor x0 y0)
+          tr = negate (Dilation factor l)
       withSVGSurface output w h $ \surface ->
         renderWith surface $ renderNoteData ((apply tr <$>) <$> noteData)
     _ -> putStrLn "usage: y02svg <inputfile.y0> <outputfile.svg> <width> <height>"

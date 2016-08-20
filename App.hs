@@ -21,7 +21,7 @@ mkStroke cs = do
 
 strokeLoop :: [Coord] -> GtkP [Coord]
 strokeLoop c = do
-  tr <- use stTranslation
+  tr <- use stDilation
   old <- mkStroke $ reverse c -- FIXME: slow!
   stRender .= drawStroke (apply tr <$> old)
   invalidate $ boundingBox $ old
@@ -48,7 +48,7 @@ stroke c0 = do
 
 lassoProcessLoop :: Source -> [Coord] -> GtkP ClosedCurve
 lassoProcessLoop source c = do
-  tr <- use stTranslation
+  tr <- use stDilation
   let res = Closed $ V.fromList c
   stRender .= drawLasso (apply tr <$> res)
   invalidate $ boundingBox c
@@ -93,7 +93,7 @@ selectNear p = do
   stNoteData .= kept
 
 fuzzyFactor :: GtkP Double
-fuzzyFactor = use (stTranslation.trZoom.to (10 /))
+fuzzyFactor = use (stDilation.trZoom.to (10 /))
 
 setSelection :: Selection -> GtkP ()
 setSelection sel = do
@@ -184,7 +184,7 @@ touchProcessDetect time0 touches
        -- fingers stable, run next phase.
        -- FIXME: two input touches must not start too close from each other!
        sel <- use stSelection
-       tr <- use stTranslation
+       tr <- use stDilation
        let msel = if any (`inArea` sel) (map (apply (negate tr) . fingerStart) (M.elems touches))
                   then Just sel
                   else Nothing
@@ -210,13 +210,13 @@ touchProcessDetect time0 touches
 -- We pass the original selection here, so that we do not repeatedly modify the
 -- selection with small translations, which would eventually accumulate
 -- numerical errors.
-touchProcess :: Maybe Selection -> Translation -> M.Map Int Finger -> GtkP ()
+touchProcess :: Maybe Selection -> Dilation -> M.Map Int Finger -> GtkP ()
 touchProcess selection origTrans touches
   | M.null touches = exit
   | otherwise = do
   ev <- waitInTrans zero "multi-touch"
   let rb = do Process.recycle ev
-              stTranslation .= origTrans -- fixme: check if this is necessary
+              stDilation .= origTrans -- fixme: check if this is necessary
               exit
   case eventSource ev of
     MultiTouch -> case () of
@@ -258,19 +258,16 @@ touchProcess selection origTrans touches
    cont = touchProcess selection origTrans
 
 -- | Translate and zoom the whole sheet by the given amount.
-transSheet :: Translation -> Coord -> Coord -> Double -> GtkP ()
+transSheet :: Dilation -> Coord -> Coord -> Double -> GtkP ()
 transSheet origTrans a0 a1 z1 = do
-  let Translation z0 dx0 dy0 = origTrans
-  let (a0x,a0y) = xy a0 (,)
-      (a1x,a1y) = xy a1 (,)
-  stTranslation .= Translation z1 (dx0 + z0 * a1x - z1 * a0x) (dy0 + z0 * a1y - z1 * a0y)
+  let Dilation z0 d0 = origTrans
+  stDilation .= Dilation z1 (d0 + z0 *^ a1 - z1 *^ a0)
   invalidateAll
 
 -- | Translate and zoom the selection by the given amount.
 transSel :: Selection -> Coord -> Coord -> Double -> GtkP ()
 transSel origSel a0 a1 factor = do
-  let (Coord dx dy _ _) = a1 - factor *^ a0
-  setSelection (fmap (apply (Translation factor dx dy)) origSel)
+  setSelection (fmap (apply (Dilation factor (a1 - factor *^ a0))) origSel)
 
 moveSelWithPen :: Selection -> Coord -> GtkP ()
 moveSelWithPen origSel origCoord = do
@@ -345,7 +342,7 @@ whynote = do
   ev <- wait "top-level"
   st <- use (to id)
   sel <- use stSelection
-  tr <- use stTranslation
+  tr <- use stDilation
   let pressure = coordZ (eventCoord ev)
       havePressure = pressure > 0
       haveSel = not . isEmptySelection $ sel
@@ -397,12 +394,12 @@ whynote = do
 
 
 selMenuCenter :: St -> Coord
-selMenuCenter St{..} = apply _stTranslation (intervalHi (selectionBox _stSelection))
+selMenuCenter St{..} = apply _stDilation (intervalHi (selectionBox _stSelection))
 
 rootMenuCenter :: Coord
 rootMenuCenter = Coord 40 40 0 0
 
-renderAll ctx st@St{_stTranslation = tr,..} = do
+renderAll ctx st@St{_stDilation = tr,..} = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
    renderNoteData ((apply tr <$>) <$> _stNoteData)
    whenSel $ renderSelection (apply tr <$> _stSelection)
