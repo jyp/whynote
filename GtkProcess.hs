@@ -86,17 +86,12 @@ invalidateAll = do
     h <- liftIO $ Gtk.drawWindowGetHeight _ctxDrawWindow
     Gtk.drawWindowInvalidateRect _ctxDrawWindow (Gtk.Rectangle 0 0 w h) False
 
-invalidateIn :: Translation -> Box -> GtkP ()
-invalidateIn tr b0 = do
-  let Box (x0,y0) (x1,y1) = fmap (over both round . coordToPt) $ extend 5 $ fmap (apply tr) b0
+invalidate :: Box -> GtkP ()
+invalidate b0 = do
+  let Box (x0,y0) (x1,y1) = fmap (over both round . coordToPt) $ extend 5 $ b0
   Ctx {..} <- ask
   let rect = (Gtk.Rectangle x0 y0 (x1-x0) (y1-y0))
   liftIO $ Gtk.drawWindowInvalidateRect _ctxDrawWindow rect False
-
-invalidate :: Box -> GtkP ()
-invalidate bx = do
-  tr <- use stTranslation
-  invalidateIn tr bx
 
 wait :: String -> GtkP Event
 wait msg = do
@@ -122,9 +117,6 @@ wakeup ev msec = do
                        eventModifiers = 0}
     return False
   return ()
-
-recycle :: Translation -> Event -> GtkP ()
-recycle tr ev = Process.recycle (translateEvent tr ev)
 
 writeState :: String -> St -> IO ()
 writeState fname St {..} = writeNote fname (NoteFile _stNoteData)

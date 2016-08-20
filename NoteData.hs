@@ -107,7 +107,7 @@ instance Area Box where
   nearArea d p b = inArea p (extend d b)
 
 -- FIXME: rename to 'dilation'
-data Translation = Translation {_trZoom, _trDX, _trDY :: Double}
+data Translation = Translation {_trZoom, _trDX, _trDY :: Double} -- FIXME: replace coords by Coord
 
 apply :: Translation -> Coord -> Coord
 apply (Translation zz dx dy) (Coord x y z t) = Coord (x*zz + dx) (y*zz + dy) z t

@@ -172,27 +172,24 @@ touchProcessEntry ev = do
   wakeup ev 70
   touchProcessDetect (Just (eventTime ev)) (M.singleton (eventButton ev) (fingerBegin (eventCoord ev)))
 
--- FIXME: use absolute positions for this process.
 touchProcessDetect :: Maybe Word32 -> M.Map Int Finger -> GtkP ()
 touchProcessDetect time0 touches
   | M.null touches = return ()
   | otherwise = do
-  ev <- wait ("multi-touch startup " ++ show (M.keys touches))
+  ev <- waitInTrans zero ("multi-touch startup " ++ show (M.keys touches))
   wakeup ev 70
-  tr <- use stTranslation
-  let rb = recycle tr ev
+  let rb = Process.recycle ev
   case time0 of
     Just t0 | (eventTime ev > t0 + 50) && (M.size touches `elem` [1,2]) -> do
        -- fingers stable, run next phase.
        -- FIXME: two input touches must not start too close from each other!
        sel <- use stSelection
-       let msel = if any (`inArea` sel) (map fingerStart (M.elems touches))
+       tr <- use stTranslation
+       let msel = if any (`inArea` sel) (map (apply (negate tr) . fingerStart) (M.elems touches))
                   then Just sel
                   else Nothing
-       let touches0 = fmap (fmap (apply tr)) (M.elems touches)
-       stRender .= do -- show where fingers, to give feedback that the touch gesture is recognized.
-         forM_ touches0 renderFinger
-       invalidateIn zero $ boundingBox $ map fingerBox touches0
+       stRender .= forM_ touches renderFinger
+       invalidate $ boundingBox $ map fingerBox $ M.elems touches
        rb
        touchProcess msel tr touches
     _ -> case eventSource ev of
@@ -217,9 +214,9 @@ touchProcess :: Maybe Selection -> Translation -> M.Map Int Finger -> GtkP ()
 touchProcess selection origTrans touches
   | M.null touches = exit
   | otherwise = do
-  ev <- waitInTrans origTrans "multi-touch"
-  let rb = do recycle origTrans ev
-              stTranslation .= origTrans
+  ev <- waitInTrans zero "multi-touch"
+  let rb = do Process.recycle ev
+              stTranslation .= origTrans -- fixme: check if this is necessary
               exit
   case eventSource ev of
     MultiTouch -> case () of
@@ -227,7 +224,7 @@ touchProcess selection origTrans touches
       _ | eventType ev `elem` [Begin,Cancel,End] -> exit
       _ | eventType ev `elem` [Update] -> do
                 let touches' = M.alter (fingerAdd (eventCoord ev)) (eventButton ev) touches
-                    pss = M.elems touches'
+                    pss = (apply (negate origTrans) <$>) <$> M.elems touches'
                     ps0 = map fingerStart pss
                     ps1 = map fingerCurrent pss
                     s0 = peri ps0
@@ -236,8 +233,7 @@ touchProcess selection origTrans touches
                     a0 = average ps0
                     a1 = average ps1
 
-                stRender .= do
-                  forM_ (M.elems  touches') (renderFinger . inIdMatrix)
+                stRender .= forM_ (M.elems  touches') renderFinger -- fixme: auto system for invasetting/resetting render
 
                 inv (M.elems touches' ++ M.elems touches)
                 case (length pss,selection) of
@@ -258,16 +254,14 @@ touchProcess selection origTrans touches
      stRender .= return ()
      inv (M.elems touches)
    inv ts = when (not (null ts)) $ do
-     invalidateIn zero $ boundingBox $ map (fingerBox . inIdMatrix) ts
-   inIdMatrix = fmap (apply origTrans)
+     invalidate $ boundingBox $ map fingerBox ts
    cont = touchProcess selection origTrans
 
 -- | Translate and zoom the whole sheet by the given amount.
 transSheet :: Translation -> Coord -> Coord -> Double -> GtkP ()
-transSheet origTrans a0 a1 factor = do
+transSheet origTrans a0 a1 z1 = do
   let Translation z0 dx0 dy0 = origTrans
-  let z1 = max 0.1 (z0*factor)
-      (a0x,a0y) = xy a0 (,)
+  let (a0x,a0y) = xy a0 (,)
       (a1x,a1y) = xy a1 (,)
   stTranslation .= Translation z1 (dx0 + z0 * a1x - z1 * a0x) (dy0 + z0 * a1y - z1 * a0y)
   invalidateAll
@@ -333,7 +327,7 @@ menu' a0 p c options = do
            hideMenu
            case active of
               Just i -> snd (options !! i) eventCoord
-              Nothing -> recycle zero Event{..}
+              Nothing -> Process.recycle Event{..}
        else menu' a0 eventCoord c options
 
 penMenu :: [(String, Coord -> GtkP ())]
@@ -398,7 +392,7 @@ whynote = do
         else selectProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
-        touchProcessEntry ev
+        touchProcessEntry ev {eventCoord = evOrig}
     _ -> return ()
 
 
