@@ -90,3 +90,16 @@ curveApproxes curve = Node (c1,c2) (if (Prelude.length curve > 4 && err > eps) t
         recur = (maxErrT,w,curveApproxes (l <> V.singleton (V.head r)),curveApproxes r)
         (l,r) = V.splitAt i curve
         eps = 0.1
+
+{-approxCurve :: Curve -> Cairo.Render ()
+approxCurve (Curve c) = when (V.length c >= 4) $ do
+  setLineWidth 0.2
+  Cairo.setSourceRGBA 1 0.2 0.2 1
+  moveTo x0 y0
+  curveTo x1 y1 x2 y2 x3 y3
+  stroke
+  where [Coord x0 y0 z0 0,
+         Coord x1 y1 z1 1,
+         Coord x2 y2 z2 2,
+         Coord x3 y3 z3 3] = fst (approxControlPoints' c)
+-}

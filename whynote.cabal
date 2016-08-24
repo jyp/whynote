@@ -58,7 +58,6 @@ executable whynote
      Device
      App
      Config
-     CurveApprox
      Event
      File
      GtkProcess

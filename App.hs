@@ -22,9 +22,9 @@ mkStroke cs = do
 strokeLoop :: [Coord] -> GtkP [Coord]
 strokeLoop c = do
   tr <- use stDilation
-  old <- mkStroke $ reverse c -- FIXME: slow!
-  stRender .= drawStroke (apply tr <$> old)
-  invalidate $ boundingBox $ old
+  old <- (apply tr <$>) <$> mkStroke (reverse c) -- FIXME: slow!
+  stRender .= drawStroke old
+  invalidate $ boundingBox old
   ev <- wait "next stroke point"
   let cs' = (eventCoord ev:c)
   case eventSource ev of

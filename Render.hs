@@ -12,7 +12,6 @@ import qualified Data.Vector as V
 import Data.Traversable
 import Data.Foldable
 import Data.List (findIndex)
-import CurveApprox
 
 -- | For debugging multitouch events.
 renderFinger :: Finger -> Render ()
@@ -62,18 +61,6 @@ drawStrokeSelected (Stroke opts (Boxed _ c)) = do
   Cairo.setSourceRGBA 1 1 1 1
   Cairo.setFillRule Cairo.FillRuleWinding
   Cairo.fill
-
-approxCurve :: Curve -> Cairo.Render ()
-approxCurve (Curve c) = when (V.length c >= 4) $ do
-  setLineWidth 0.2
-  Cairo.setSourceRGBA 1 0.2 0.2 1
-  moveTo x0 y0
-  curveTo x1 y1 x2 y2 x3 y3
-  stroke
-  where [Coord x0 y0 z0 0,
-         Coord x1 y1 z1 1,
-         Coord x2 y2 z2 2,
-         Coord x3 y3 z3 3] = fst (approxControlPoints' c)
 
 strokePath :: PenOptions -> Curve -> Cairo.Render ()
 strokePath (PenOptions {..}) (Curve c)
