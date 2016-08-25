@@ -23,7 +23,7 @@ strokeLoop :: [Sample] -> GtkP [Sample]
 strokeLoop c = do
   tr <- use stDilation
   old <- (apply tr <$>) <$> mkStroke (reverse c) -- FIXME: slow!
-  stRender .= drawStroke old
+  setGui [Strk old]
   invalidate $ boundingBox old
   ev <- wait "next stroke point"
   let cs' = (eventSample ev:c)
@@ -43,15 +43,13 @@ stroke :: Sample -> GtkP ()
 stroke c0 = do
   strk <- mkStroke =<< (cleanStroke . reverse) <$> strokeLoop [c0]
   stNoteData %= (strk:)
-  stRender .= return ()
-  return ()
+  setGui []
 
 lassoProcessLoop :: Source -> [Coord] -> GtkP ClosedCurve
 lassoProcessLoop source c = do
   tr <- use stDilation
   let res = Closed $ V.fromList c
-  stRender .= drawLasso (apply tr <$> res)
-  invalidate $ boundingBox c
+  setGui [Lass (apply tr <$> res)]
   ev <- wait "next lasso point"
   case eventSource ev == source of
     False -> lassoProcessLoop source c -- ignore events from another source
@@ -69,12 +67,11 @@ lassoProcess :: Source -> GtkP ()
 lassoProcess source = do
   deselect
   bounds <- lassoProcessLoop source []
-  stRender .= return ()
+  setGui []
   (inside,outside) <- lassoPartitionStrokes (box bounds) <$> use stNoteData
   setSelection (mkSelection inside)
   stNoteData .= outside
   liftIO $ putStrLn $ "rah: " ++ show (boundingBox bounds)
-  invalidate $ boundingBox bounds
   return ()
 
 mkSelection :: [Stroke] -> Selection
@@ -116,8 +113,9 @@ deselectNear p = do
 
 eraseNear :: Coord -> GtkP ()
 eraseNear p = do
+  tr <- use stDilation
   (erased,kept) <- partitionStrokesNear 10 p <$> use stNoteData
-  invalidate $ boundingBox erased
+  invalidate (apply tr <$> boundingBox erased)
   stRedo %= (erased++)
   stNoteData .= kept
 
@@ -137,22 +135,14 @@ neighbourhoodProcessLoop source action = do
 
 eraseProcess :: Source -> GtkP ()
 eraseProcess source = do
-  stRender .= return ()
   deselect
   neighbourhoodProcessLoop source eraseNear
-  return ()
 
 selectProcess :: Source -> GtkP ()
-selectProcess source = do
-  stRender .= return ()
-  neighbourhoodProcessLoop source selectNear
-  return ()
+selectProcess source = neighbourhoodProcessLoop source selectNear
 
 deSelectProcess :: Source -> GtkP ()
-deSelectProcess source = do
-  stRender .= return ()
-  neighbourhoodProcessLoop source deselectNear
-  return ()
+deSelectProcess source = neighbourhoodProcessLoop source deselectNear
 
 fingerBegin coord = Finger {fingerStart = coord, fingerCurrent = coord}
 fingerAdd coord Nothing = Just (fingerBegin coord)
@@ -188,8 +178,7 @@ touchProcessDetect time0 touches
        let msel = if any (`inArea` sel) (map (apply (negate tr) . fingerStart) (M.elems touches))
                   then Just sel
                   else Nothing
-       stRender .= forM_ touches renderFinger
-       invalidate $ boundingBox $ map fingerBox $ M.elems touches
+       setGui (map Fing (M.elems touches))
        rb
        touchProcess msel tr touches
     _ -> case eventSource ev of
@@ -232,8 +221,7 @@ touchProcess selection origTrans touches
                                                 2 -> s1 / (s0+1) -- FIXME: +1 is not nice here
                     dil = Dilation factor (a1 - factor *^ a0)
 
-                stRender .= forM_ (M.elems touches') renderFinger -- fixme: auto system for setting/resetting render
-                inv (M.elems touches' ++ M.elems touches)
+                setGui (map Fing (M.elems touches'))
                 case selection of
                   Just sel -> transSel sel dil
                   Nothing -> do stDilation .= origTrans + dil
@@ -246,10 +234,7 @@ touchProcess selection origTrans touches
     _ -> do liftIO $ putStrLn $ "event from" ++ show (eventSource ev)
             cont touches
  where
-   exit = do stRender .= return ()
-             inv (M.elems touches)
-   inv ts = when (not (null ts)) $ do
-     invalidate $ boundingBox $ map fingerBox ts
+   exit = setGui []
    cont = touchProcess selection origTrans
 
 transSel :: Selection -> Dilation -> GtkP ()
@@ -296,15 +281,15 @@ menu a0 options c = menu' a0 c c options
 
 menu' :: Double -> Coord -> Coord -> [(String, Coord -> GtkP ())] -> GtkP ()
 menu' a0 p c options = do
-  let hideMenu = do stRender .= return (); invalidateAll
+  let hideMenu = setGui []
   if dist p c > menuOuterCircle
      then hideMenu
      else do
-       let rMenu sho p' = renderMenu sho a0 p' c $ map fst options
-       stRender .= do _active <- rMenu True p ; return ()
+       let rMenu p' = Menu a0 p' c $ map fst options
+       setGui [rMenu p]
        invalidateAll -- TODO optimize
        ev@Event {..} <- waitInTrans zero "menu"
-       active <- renderNow $ rMenu False (eventCoord ev)
+       active <- testMenu $ rMenu (eventCoord ev)
        if eventType == Press || eventType == Begin
        then do
            hideMenu
@@ -388,7 +373,7 @@ renderAll ctx st@St{_stDilation = tr,..} = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
    renderNoteData ((apply tr <$>) <$> _stNoteData)
    whenSel $ renderSelection (apply tr <$> _stSelection)
-   _stRender
+   forM_ _stGui renderGui
    renderSoftButtons ctx st
    renderMenuRoot "menu" rootMenuCenter
    whenSel $ renderMenuRoot "sel" (selMenuCenter st)

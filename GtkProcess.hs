@@ -30,7 +30,7 @@ $(makeLenses ''Ctx)
 
 data SoftButton = Erase | Lasso | Select deriving (Eq,Show)
 data St =
-  St { _stRender      :: !(Render ()) -- ^ extra stuff to render
+  St { _stGui  :: ![GuiElement] -- ^ extra stuff to render
      , _stNoteData    :: !NoteData
      , _stRedo        :: ![Stroke]
      , _stSelection   :: !Selection
@@ -45,7 +45,7 @@ newtype GtkP a = GtkP {gtkP :: ReaderT Ctx (P St Event) a}
 $(makeLenses ''St)
 
 initSt :: NoteData -> St
-initSt dat = St{_stRender = return ()
+initSt dat = St{_stGui = []
                ,_stNoteData = dat
                ,_stSelection = emptySelection
                ,_stDilation = zero
@@ -123,10 +123,15 @@ loadState fname = do
   NoteFile s <- readNote fname
   return s
 
-renderNow :: Render a -> GtkP a
-renderNow r = do
+setGui :: [GuiElement] -> GtkP ()
+setGui new = do
+  old <- use stGui
+  stGui .= new
+  invalidate (boundingBox old \/ boundingBox new)
+
+testMenu (Menu a0 p c opts) = do
   dw <- view ctxDrawWindow
-  liftIO $ Gtk.renderWithDrawWindow dw r
+  liftIO $ Gtk.renderWithDrawWindow dw $ renderMenu False a0 p c opts
 
 getWinSize :: Ctx -> IO (Int,Int)
 getWinSize Ctx {..} = (,) <$> (Gtk.drawWindowGetWidth _ctxDrawWindow) <*> (Gtk.drawWindowGetHeight _ctxDrawWindow)

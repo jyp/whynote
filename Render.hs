@@ -1,10 +1,10 @@
-{-# LANGUAGE RecordWildCards,ViewPatterns #-}
+{-# LANGUAGE RecordWildCards,ViewPatterns,DeriveFunctor,TypeSynonymInstances,FlexibleContexts,FlexibleInstances #-}
+{-# OPTIONS -Wall #-}
 module Render where
 
 import qualified Prelude as P
 import WNPrelude
 import Graphics.Rendering.Cairo as Cairo
-import Graphics.Rendering.Cairo.Matrix
 import qualified Graphics.UI.Gtk as G
 import Control.Monad (when)
 import NoteData
@@ -13,21 +13,29 @@ import Data.Traversable
 import Data.Foldable
 import Data.List (findIndex)
 
--- | For debugging multitouch events.
-renderFinger :: Finger -> Render ()
-renderFinger Finger {fingerCurrent = Coord x y} = saveEx $ do
+type GuiElement = GuiElement' Coord
+data GuiElement' a = Lass (ClosedCurve' a)
+                   | Fing (Finger' a)
+                   | Strk (Stroke' a)
+                   | Menu {menuAngle::Double,menuCursor::a,menuCenter::a,menuOptions::[String]}
+                   deriving Functor
+
+instance HasBox GuiElement where
+  boundingBox (Fing f) = extend 84 . boundingBox . fingerCurrent $ f
+  boundingBox (Strk s) = boundingBox s
+  boundingBox (Lass s) = boundingBox s
+  boundingBox (Menu _ _ c _) = extend menuOuterCircle (boundingBox c)
+
+renderGui :: GuiElement' Coord -> Render ()
+renderGui (Fing (Finger {fingerCurrent = Coord x y})) = saveEx $ do
   Cairo.setSourceRGBA 0 0 0 0.7
   setLineWidth 3
   moveTo x y
   arc x y 80 0 (2*pi)
   Cairo.stroke
-
-fingerBox :: Finger -> Box
-fingerBox = extend 84 . boundingBox . fingerCurrent
-
--- | Draw the lasso for a given curve
-drawLasso :: ClosedCurve -> Cairo.Render ()
-drawLasso (Closed c)
+renderGui (Menu a p c opts) = renderMenu True a p c opts >> return ()
+renderGui (Strk s) = drawStroke s
+renderGui (Lass (Closed c))
   | V.null c = return ()
   | otherwise = do
     let p0 = V.head c
@@ -82,7 +90,7 @@ strokePath (PenOptions {..}) (Curve c)
         (x1,y1) .-. (x0,y0) = (x1-x0 , y1-y0)
         (x1,y1) .+. (x0,y0) = (x1+x0 , y1+y0)
         z *. (x0,y0) = (z * x0 , z * y0)
-        forward pc0@(Sample (Coord x0 y0) z0 t0) pc1@(Sample (Coord x y) z t) = do
+        forward pc0@(Sample (Coord x0 y0) z0 _) pc1@(Sample (Coord x y) z _) = do
           let p0 = (x0,y0)
               p1 = (x,y)
               dp = p1 .-. p0
