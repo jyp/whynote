@@ -15,7 +15,7 @@ import Data.List (findIndex)
 
 -- | For debugging multitouch events.
 renderFinger :: Finger -> Render ()
-renderFinger Finger {fingerCurrent = Coord x y _ _} = saveEx $ do
+renderFinger Finger {fingerCurrent = Coord x y} = saveEx $ do
   Cairo.setSourceRGBA 0 0 0 0.7
   setLineWidth 3
   moveTo x y
@@ -66,7 +66,7 @@ strokePath :: PenOptions -> Curve -> Cairo.Render ()
 strokePath (PenOptions {..}) (Curve c)
   | V.length c <= 1 = return ()
   | otherwise = do
-    let phead@(Coord xo yo _z0 _t0) = V.head c
+    let phead@(Sample (Coord xo yo) _ _) = V.head c
         xs = V.tail c
     Cairo.moveTo xo yo
     let plast = V.head rxs0
@@ -82,7 +82,7 @@ strokePath (PenOptions {..}) (Curve c)
         (x1,y1) .-. (x0,y0) = (x1-x0 , y1-y0)
         (x1,y1) .+. (x0,y0) = (x1+x0 , y1+y0)
         z *. (x0,y0) = (z * x0 , z * y0)
-        forward pc0@(Coord x0 y0 z0 t0) pc1@(Coord x y z t) = do
+        forward pc0@(Sample (Coord x0 y0) z0 t0) pc1@(Sample (Coord x y) z t) = do
           let p0 = (x0,y0)
               p1 = (x,y)
               dp = p1 .-. p0
@@ -100,7 +100,7 @@ strokePath (PenOptions {..}) (Curve c)
 clipNoteData :: NoteData -> Render NoteData
 clipNoteData cs = saveEx $ do
   Just r@(G.Rectangle (t->x) (t->y) (t->w) (t->h)) <- G.getClipRectangle
-  let box = Box (Coord x y 1 0) (Coord (x+w) (y+h) 1 0)
+  let box = Box (Coord x y ) (Coord (x+w) (y+h))
   return (filter (overlapBox box . boundingBox) cs)
   where       t = fromIntegral
 
@@ -119,7 +119,7 @@ menuInnerCircle = 50 -- FIXME: rename to Radius
 menuOuterCircle = 150
 
 renderNode  :: Bool -> String -> Double -> Coord -> Render ()
-renderNode active t rad (Coord cx cy _ _) = saveEx $ do
+renderNode active t rad (Coord cx cy) = saveEx $ do
   Cairo.translate cx cy
   moveTo rad 0
   arc 0 0 rad 0 (2*pi)
@@ -135,7 +135,7 @@ renderMenuRoot t = renderNode False t menuRootRadius
 
 
 coordToPt :: Coord -> (Double,Double)
-coordToPt (Coord x y _ _) = (x,y)
+coordToPt (Coord x y) = (x,y)
 
 -- TODO: use a record for the options.
 -- | Render a menu, and return the selected option.

@@ -9,12 +9,13 @@ import Data.List
 import Data.Word
 import qualified Data.Vector as V
 
+data Sample' a = Sample {sampleCoord :: !a
+                        ,sampleZ :: !Double -- pressure ∈ [0..1]
+                        ,sampleT :: !Word32} deriving (Show,Eq,Ord,Functor)
+type Sample = Sample' Coord
 data Coord = Coord { coordX :: !Double
                    , coordY :: !Double
-                   , coordZ :: !Double -- pressure (> 0). Note that scaling gives pressures > 1.
-                   , coordT :: !Word32
-                   }
-           deriving (Show,Eq,Ord)
+                   } deriving (Show,Eq,Ord)
 
 data Finger' a = Finger {fingerStart :: a,
                          fingerCurrent :: a} deriving Functor
@@ -38,16 +39,16 @@ data PenOptions' a =
 
 
 instance Additive Coord where
-  Coord x1 y1 z1 t1 + Coord x2 y2 z2 t2 = Coord (x1+x2)(y1+y2)(z1+z2) (t1+t2)
-  zero = Coord 0 0 0 0
+  Coord x1 y1 + Coord x2 y2 = Coord (x1+x2) (y1+y2)
+  zero = Coord 0 0
 instance AbelianAdditive Coord
 instance Group Coord where
-  Coord x1 y1 z1 t1 - Coord x2 y2 z2 t2 = Coord (x1-x2)(y1-y2)(z1-z2) (t1-t2)
+  Coord x1 y1 - Coord x2 y2 = Coord (x1-x2) (y1-y2)
 instance Module Double Coord where
-  f *^ (Coord x y z t) = Coord (f*x) (f*y) z t
+  f *^ (Coord x y) = Coord (f*x) (f*y)
 
 xy :: forall t. Coord -> (Double -> Double -> t) -> t
-xy (Coord x y _ _) f  = f x y
+xy (Coord x y) f  = f x y
 
 data Selection' a = Selection {selectionBox :: Interval a, selectionStrokes::[Stroke' a]}
   deriving Functor
@@ -73,7 +74,7 @@ box x = Boxed (boundingBox x) x
 
 extend :: Double -> Box -> Box
 extend d (Box p1 p2) = Box (p1-x)(p2+x)
-  where x = Coord d d 0 0
+  where x = Coord d d
 
 class HasBox a where
   boundingBox :: a -> Box
@@ -93,6 +94,9 @@ instance HasBox a => HasBox (V.Vector a) where
 instance HasBox Coord where
   boundingBox c = Box c c
 
+instance HasBox a => HasBox (Sample' a) where
+  boundingBox (Sample c _ _) = boundingBox c
+
 class Area a where
   inArea :: Coord -> a -> Bool
   nearArea :: Double -> Coord -> a -> Bool
@@ -102,7 +106,7 @@ instance Area (a Coord) => Area (Boxed a) where
   nearArea d p (Boxed b a) = nearArea d p b && nearArea d p a
 
 instance Area Box where
-  inArea (Coord x y _ _) (Box p1 p2) =
+  inArea (Coord x y) (Box p1 p2) =
     p1 `xy` \x1 y1 -> p2 `xy` \x2 y2 -> x1 <= x && x <= x2 && y1 <= y && y <= y2
   nearArea d p b = inArea p (extend d b)
 
@@ -121,7 +125,7 @@ instance Group Dilation where
 
 data Interval a = Box {intervalLo :: !a, intervalHi :: !a} deriving (Functor,Show)
 type Box = Interval Coord
-newtype Curve' a = Curve {fromCurve :: V.Vector a}
+newtype Curve' a = Curve {fromCurve :: V.Vector (Sample' a)}
   deriving (Functor,HasBox)
 type Curve = Curve' Coord
 newtype ClosedCurve' a = Closed (V.Vector a)
@@ -131,8 +135,8 @@ data Stroke' a = Stroke (PenOptions' a) (Boxed' Curve' a)
   deriving Functor
 type Stroke = Stroke' Coord
 instance HasBox Stroke where
-  boundingBox (Stroke pen x) = extend (z * boxWidth (_penShape pen)) bbox
-    where bbox@(Box _ (Coord _ _ z _)) = boundingBox x
+  boundingBox (Stroke pen x) = extend (boxWidth (_penShape pen)) bbox
+    where bbox = boundingBox x
 instance Area Stroke where
   inArea p (Stroke _ x) = inArea p x
   nearArea d p (Stroke _ x) = nearArea d p x
@@ -140,7 +144,7 @@ type NoteData = [Stroke]
 
 -- | Quadrand where the coord lies
 quadrant :: Coord -> Int
-quadrant (Coord x y _ _) = if x > 0
+quadrant (Coord x y) = if x > 0
                               then if y > 0 then 0 else 3
                               else if y > 0 then 1 else 2
 
@@ -166,11 +170,11 @@ instance Area ClosedCurve where
           winding = sum dqs `div` 4
 
 strokeInArea :: Area a => Stroke -> a -> Bool
-(Stroke _ (Boxed _ (Curve s1))) `strokeInArea` s2 = all (`inArea` s2) s1
+(Stroke _ (Boxed _ (Curve s1))) `strokeInArea` s2 = all ((`inArea` s2) . sampleCoord) s1
 
 instance Area Curve where
   inArea _ _ = False
-  nearArea d p (Curve ps) = any (nearArea d p) ps
+  nearArea d p (Curve ps) = any (nearArea d p . sampleCoord) ps
 
 lassoPartitionStrokes :: Boxed ClosedCurve' -> [Stroke] -> ([Stroke],[Stroke])
 lassoPartitionStrokes strk = partition (`strokeInArea` strk)
@@ -178,7 +182,7 @@ lassoPartitionStrokes strk = partition (`strokeInArea` strk)
 instance Area Coord where
   inArea p1 p2 = p1 == p2
   nearArea d p1 p2 = dx*dx + dy*dy < d*d
-    where Coord dx dy _ _ = p2 - p1
+    where Coord dx dy = p2 - p1
 
 partitionStrokesNear :: Double -> Coord -> [Stroke] -> ([Stroke],[Stroke])
 partitionStrokesNear d2 p strks = partition (nearArea d2 p) strks
@@ -190,17 +194,17 @@ class Lattice a where
 infty :: Double
 infty = 1/0
 instance Lattice Coord where
-  (Coord x1 y1 z1 t1) \/ (Coord x2 y2 z2 t2) = Coord (max x1 x2) (max y1 y2)(max z1 z2)(max t1 t2)
+  (Coord x1 y1) \/ (Coord x2 y2) = Coord (max x1 x2) (max y1 y2)
   c1 /\ c2 = negate ((negate c1) \/ (negate c2))
-  bottom = Coord infty infty infty maxBound
-  top = Coord (-infty) (-infty) (-infty) minBound
+  bottom = Coord infty infty
+  top = Coord (-infty) (-infty)
 instance Lattice a => Lattice (Interval a) where
   (Box l1 h1) \/ (Box l2 h2) = Box (l1 /\ l2) (h1 \/ h2)
   (Box l1 h1) /\ (Box l2 h2) = Box (l1 \/ l2) (h1 /\ h2)
   bottom = Box top bottom
   top = Box bottom top
 
-nilBox (Box (Coord x0 y0 _ _) (Coord x1 y1 _ _)) = (x0 >= x1) || (y0 >= y1)
+nilBox (Box (Coord x0 y0) (Coord x1 y1)) = (x0 >= x1) || (y0 >= y1)
 
 overlapBox :: Box -> Box -> Bool
 overlapBox b1 b2 = not $ nilBox $ b1 /\ b2
@@ -208,11 +212,11 @@ overlapBox b1 b2 = not $ nilBox $ b1 /\ b2
 ----
 -- Serialisation
 
-instance ToJSON Coord where
-  toJSON (Coord x y z t) = object ["x" .= x, "y" .= y, "z" .= z, "t" .= t]
+instance ToJSON Sample where
+  toJSON (Sample (Coord x y) z t) = object ["x" .= x, "y" .= y, "z" .= z, "t" .= t]
 
-instance FromJSON Coord where
-  parseJSON = withObject "Coord" $ \v -> Coord <$> v.: "x" <*> v.: "y" <*> v.: "z" <*> v.: "t"
+instance FromJSON Sample where
+  parseJSON = withObject "Coord" $ \v -> Sample <$> (Coord <$> v.: "x" <*> v.: "y") <*> v.: "z" <*> v.: "t"
 
 instance FromJSON Curve where
     parseJSON = withObject "Curve" $ \a -> Curve <$> a.: "points"

@@ -72,9 +72,6 @@ palmRejection lastTouch lastStaleTouch = do
 runGtkP :: Ctx -> GtkP a -> Process St Event
 runGtkP ctx (GtkP p) = run (runReaderT p ctx)
 
-translateEvent :: Dilation -> Event -> Event
-translateEvent tr Event {..} = Event{eventCoord = apply tr eventCoord,..}
-
 quit :: GtkP ()
 quit = GtkP $ lift $ processDone
 
@@ -99,7 +96,7 @@ wait msg = do
   waitInTrans tr msg
 
 waitInTrans :: Dilation -> String -> GtkP Event
-waitInTrans tr msg = translateEvent (negate tr) <$> Process.wait msg (const True)
+waitInTrans tr msg = (apply (negate tr) <$>) <$> Process.wait msg (const True)
 
 waitOn :: String -> (Event -> Bool) -> GtkP Event
 waitOn = Process.wait
@@ -110,7 +107,7 @@ wakeup :: Event -> Word32 -> GtkP ()
 wakeup ev msec = do
   handleEvent <- view eventHandler
   _ <- liftIO $ flip Gtk.timeoutAdd (fromIntegral msec) $ do
-    handleEvent Event {eventCoord = (eventCoord ev) {coordT = eventTime ev + fromIntegral (msec)},
+    handleEvent Event {eventSample = (eventSample ev) {sampleT = eventTime ev + fromIntegral (msec)},
                        eventSource = Timeout,
                        eventButton = 0,
                        eventType = End,

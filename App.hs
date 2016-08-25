@@ -14,32 +14,32 @@ import qualified Process
 import qualified Data.Vector as V
 import Config (configuredPens)
 
-mkStroke :: [Coord] -> GtkP Stroke
+mkStroke :: [Sample] -> GtkP Stroke
 mkStroke cs = do
   opts <- use stPen
   return $ Stroke opts (box $ Curve $ V.fromList cs)
 
-strokeLoop :: [Coord] -> GtkP [Coord]
+strokeLoop :: [Sample] -> GtkP [Sample]
 strokeLoop c = do
   tr <- use stDilation
   old <- (apply tr <$>) <$> mkStroke (reverse c) -- FIXME: slow!
   stRender .= drawStroke old
   invalidate $ boundingBox old
   ev <- wait "next stroke point"
-  let cs' = (eventCoord ev:c)
+  let cs' = (eventSample ev:c)
   case eventSource ev of
     Eraser -> return c
     Stylus -> case ev of
-      Event {..} | eventModifiers == 0 || eventType == Event.Release || coordZ (eventCoord) == 0  -> return cs'
+      Event {..} | eventModifiers == 0 || eventType == Event.Release || sampleZ (eventSample) == 0  -> return cs'
       _ -> strokeLoop cs'
     _ -> strokeLoop c -- ignore events from another source
 
 -- | Remove 0-pressure subsequences in a stroke.
-cleanStroke :: [Coord] -> [Coord]
-cleanStroke (a:b:c) | coordZ a == 0, coordZ b == 0 = cleanStroke (b:c)
+cleanStroke :: [Sample] -> [Sample]
+cleanStroke (a:b:c) | sampleZ a == 0, sampleZ b == 0 = cleanStroke (b:c)
 cleanStroke c = c
 
-stroke :: Coord -> GtkP ()
+stroke :: Sample -> GtkP ()
 stroke c0 = do
   strk <- mkStroke =<< (cleanStroke . reverse) <$> strokeLoop [c0]
   stNoteData %= (strk:)
@@ -56,7 +56,7 @@ lassoProcessLoop source c = do
   case eventSource ev == source of
     False -> lassoProcessLoop source c -- ignore events from another source
     True -> case ev of
-      Event {..} | eventType == Event.Release || eventModifiers == 0 || coordZ (eventCoord) == 0 -> return res
+      Event {..} | eventType == Event.Release || eventModifiers == 0 || sampleZ (eventSample) == 0 -> return res
       _ -> lassoProcessLoop source (eventCoord ev:c)
 
 deselect :: GtkP ()
@@ -131,7 +131,7 @@ neighbourhoodProcessLoop source action = do
       True -> case ev of
         Event {..} | eventType == Event.Release
                    || eventModifiers == 0
-                   || coordZ (eventCoord) == 0 -> return ()
+                   || sampleZ (eventSample) == 0 -> return ()
         _ -> do action (eventCoord ev)
                 neighbourhoodProcessLoop source action
 
@@ -162,7 +162,7 @@ avg x y = average [x,y]
 average :: [Coord] -> Coord
 average xs = ((1::Double)/fromIntegral (length xs)) *^ (foldr (+) zero xs)
 
-norm2 (Coord x1 y1 _ _) = x1*x1 + y1*y1
+norm2 (Coord x1 y1) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
 peri xs = sum $ zipWith dist xs (rot xs)
 
@@ -303,15 +303,15 @@ menu' a0 p c options = do
        let rMenu sho p' = renderMenu sho a0 p' c $ map fst options
        stRender .= do _active <- rMenu True p ; return ()
        invalidateAll -- TODO optimize
-       Event {..} <- waitInTrans zero "menu"
-       active <- renderNow $ rMenu False eventCoord
+       ev@Event {..} <- waitInTrans zero "menu"
+       active <- renderNow $ rMenu False (eventCoord ev)
        if eventType == Press || eventType == Begin
        then do
            hideMenu
            case active of
-              Just i -> snd (options !! i) eventCoord
+              Just i -> snd (options !! i) (eventCoord ev)
               Nothing -> Process.recycle Event{..}
-       else menu' a0 eventCoord c options
+       else menu' a0 (eventCoord ev) c options
 
 penMenu :: [(String, Coord -> GtkP ())]
 penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
@@ -329,7 +329,7 @@ whynote = do
   st <- use (to id)
   sel <- use stSelection
   tr <- use stDilation
-  let pressure = coordZ (eventCoord ev)
+  let pressure = eventPressure ev
       havePressure = pressure > 0
       haveSel = not . isEmptySelection $ sel
       inSel = haveSel && (eventCoord ev `inArea` sel)
@@ -350,11 +350,11 @@ whynote = do
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1), _stButtons st == [] -> do
       if haveSel
         then if inSel
-                then moveSelWithPen sel eventCoord
+                then moveSelWithPen sel (eventCoord ev)
                 else do
                   deselect
                   waitForRelease Stylus
-        else stroke eventCoord
+        else stroke eventSample
     Event {..} | (eventSource == Eraser && (havePressure || eventType == Press))
               || (eventSource == Stylus && (Erase `elem` _stButtons st) && (eventButton == 1 && eventType == Press)) -> do
       if haveSel
@@ -363,7 +363,7 @@ whynote = do
                   else deselect
                 waitForRelease eventSource
         else do
-          eraseNear eventCoord
+          eraseNear (eventCoord ev)
           eraseProcess eventSource
     Event {eventSource = Stylus,..} | (eventModifiers==512) && havePressure
       || ((Lasso `elem` _stButtons st) && (eventButton == 1 && eventType == Press)) -> do
@@ -375,15 +375,14 @@ whynote = do
         else selectProcess (eventSource ev)
     Event {eventSource = MultiTouch} -> do
       when (eventType ev == Begin) $ do
-        touchProcessEntry ev {eventCoord = evOrig}
+        touchProcessEntry (apply tr <$> ev)
     _ -> return ()
-
 
 selMenuCenter :: St -> Coord
 selMenuCenter St{..} = apply _stDilation (intervalHi (selectionBox _stSelection))
 
 rootMenuCenter :: Coord
-rootMenuCenter = Coord 40 40 0 0
+rootMenuCenter = Coord 40 40
 
 renderAll ctx st@St{_stDilation = tr,..} = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
@@ -400,9 +399,9 @@ renderAll ctx st@St{_stDilation = tr,..} = do
 data Button' a = Button SoftButton String Double a deriving Functor
 type Button = Button' Coord
 
-softButtons = [Button Erase  "erase"  50 (Coord (-40) ( -50) 0 0)
-              ,Button Lasso  "lasso"  50 (Coord (-40) (-160) 0 0)
-              ,Button Select "select" 50 (Coord (-40) (-270) 0 0)
+softButtons = [Button Erase  "erase"  50 (Coord (-40) ( -50))
+              ,Button Lasso  "lasso"  50 (Coord (-40) (-160))
+              ,Button Select "select" 50 (Coord (-40) (-270))
               ]
 
 shiftBySz :: (Int,Int) -> Coord -> Coord
@@ -427,10 +426,10 @@ touchWaitForRelease btn touchNumber = do
 
 softButtonHandler (Button softBtn txt rad c) = loop $ do
   ctx <- view (to id)
-  Event{..} <- waitOn ("btn: " ++ txt) (\Event{..} -> eventSource == MultiTouch &&
-                                                      eventType == Begin)
+  ev@Event{..} <- waitOn ("btn: " ++ txt) (\Event{..} -> eventSource == MultiTouch &&
+                                                         eventType == Begin)
   sz <- liftIO (getWinSize ctx)
-  if (dist (shiftBySz sz c) eventCoord < rad)
+  if (dist (shiftBySz sz c) (eventCoord ev) < rad)
     then do stButtons %= (softBtn:)
             invalidateAll
             Process.forkHandler (touchWaitForRelease softBtn eventButton)

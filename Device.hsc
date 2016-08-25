@@ -114,7 +114,7 @@ getPointer devlst ptr = do
     let dev = gdk_event_get_source_device ptr
     (_ty,btn,modifiers,x,y,axf,typ,time) <- getInfo ptr
     (source,pcoord) <- coord x y dev axf
-    return $ Event source (fromIntegral btn) modifiers typ pcoord {coordT = time}
+    return $ Event source (fromIntegral btn) modifiers typ pcoord {sampleT = time}
   where
     getInfo :: Ptr t -> IO (Int32, Int32, Word32, Double, Double, Ptr CDouble,EventType,TimeStamp)
     getInfo ptr = do
@@ -156,21 +156,21 @@ getPointer devlst ptr = do
           sequ <- #{peek GdkEventTouch, sequence} ptr
           return (ty,sequ,mods,realToFrac x, realToFrac y,axis,typ,time)
         else error ("eventCoordinates: none for event type "++show ty)
-    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,Coord)
+    coord :: Double ->  Double -> Device -> Ptr CDouble -> IO (Source,Sample)
     coord x y device ptrax
           | device == dev_stylus devlst = do
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16
-            return $ (Stylus,Coord wacomx wacomy wacomz 0)
+            return (Stylus,Sample (Coord wacomx wacomy) wacomz 0)
           | device == dev_eraser devlst = do
             (wacomx :: Double) <- peekByteOff ptrax 0
             (wacomy :: Double) <- peekByteOff ptrax 8
             (wacomz :: Double) <- peekByteOff ptrax 16
-            return $ (Eraser,Coord wacomx wacomy wacomz 0)
+            return (Eraser,Sample (Coord wacomx wacomy) wacomz 0)
             -- Touch may be provided by touch screen -- not wacom device -- so no pressure here.
           | device == dev_touch devlst =
-             return $ (Touch,Coord x y 1.0 0)
+             return (Touch,Sample (Coord x y) 1.0 0)
           | device == dev_mtouch devlst =
-             return $ (MultiTouch,Coord x y 1.0 0)
-          | otherwise = return $ (Core,Coord x y 1.0 0)
+             return (MultiTouch,Sample (Coord x y) 1.0 0)
+          | otherwise = return (Core,Sample (Coord x y) 1.0 0)
