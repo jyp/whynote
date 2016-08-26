@@ -24,7 +24,6 @@ strokeLoop c = do
   tr <- use stDilation
   old <- (apply tr <$>) <$> mkStroke (reverse c) -- FIXME: slow!
   setGui [Strk old]
-  invalidate $ boundingBox old
   ev <- wait "next stroke point"
   let cs' = (eventSample ev:c)
   case eventSource ev of
@@ -71,8 +70,6 @@ lassoProcess source = do
   (inside,outside) <- lassoPartitionStrokes (box bounds) <$> use stNoteData
   setSelection (mkSelection inside)
   stNoteData .= outside
-  liftIO $ putStrLn $ "rah: " ++ show (boundingBox bounds)
-  return ()
 
 mkSelection :: [Stroke] -> Selection
 mkSelection strks = Selection (extend 10 $ boundingBox strks) strks
@@ -95,7 +92,7 @@ fuzzyFactor = use (stDilation.trZoom.to (10 /))
 setSelection :: Selection -> GtkP ()
 setSelection sel = do
   stSelection .= sel
-  invalidateAll -- because the menu needs to be redrawn (and it annoying to figure where it is)
+  invalidateAll -- because the menu needs to be redrawn (and it annoying to figure out where it is)
 
 deleteSelection :: GtkP ()
 deleteSelection = do
@@ -287,7 +284,6 @@ menu' a0 p c options = do
      else do
        let rMenu p' = Menu a0 p' c $ map fst options
        setGui [rMenu p]
-       invalidateAll -- TODO optimize
        ev@Event {..} <- waitInTrans zero "menu"
        active <- testMenu $ rMenu (eventCoord ev)
        if eventType == Press || eventType == Begin
