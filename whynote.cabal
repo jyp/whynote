@@ -26,7 +26,6 @@ executable y02svg
   build-depends: vector >= 0.10
   build-depends: old-locale
   build-depends: unordered-containers
-  build-depends: matrix
   build-depends: gtk3
   build-depends: mtl >= 2
 
@@ -51,7 +50,6 @@ executable whynote
   build-depends: old-locale
   build-depends: unordered-containers
   build-depends: QuickCheck
-  build-depends: matrix
 
   main-is: Main.hs
   other-modules:
