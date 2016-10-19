@@ -1,4 +1,4 @@
-{-# LANGUAGE RecordWildCards, FlexibleContexts, DeriveFunctor #-}
+{-# LANGUAGE RecordWildCards, FlexibleContexts, DeriveFunctor, DeriveFoldable, DeriveTraversable, MultiParamTypeClasses #-}
 module App where
 import Control.Lens hiding (transform)
 import Control.Monad
@@ -43,7 +43,7 @@ stroke c0 = do
   strk <- mkStroke =<< (cleanStroke . reverse) <$> strokeLoop [c0]
   stNoteData %= (strk:)
   setGui []
-
+ 
 lassoProcessLoop :: Source -> [Coord] -> GtkP ClosedCurve
 lassoProcessLoop source c = do
   tr <- use stDilation
@@ -126,7 +126,7 @@ neighbourhoodProcessLoop source action = do
       True -> case ev of
         Event {..} | eventType == Event.Release
                    || eventModifiers == 0
-                   || sampleZ (eventSample) == 0 -> return ()
+                   || sampleZ eventSample == 0 -> return ()
         _ -> do action (eventCoord ev)
                 neighbourhoodProcessLoop source action
 
@@ -153,7 +153,6 @@ norm2 (Coord x1 y1) = x1*x1 + y1*y1
 dist a b = sqrt (norm2 (a-b))
 peri xs = sum $ zipWith dist xs (rot xs)
 
-
 touchProcessEntry :: Event -> GtkP ()
 touchProcessEntry ev = do
   wakeup ev 70
@@ -172,7 +171,7 @@ touchProcessDetect time0 touches
        -- FIXME: two input touches must not start too close from each other!
        sel <- use stSelection
        tr <- use stDilation
-       let msel = if any (`inArea` sel) (map (apply (negate tr) . fingerStart) (M.elems touches))
+       let msel = if any ((`inArea` sel) . apply (negate tr) . fingerStart) touches
                   then Just sel
                   else Nothing
        setGui (map Fing (M.elems touches))
@@ -188,8 +187,7 @@ touchProcessDetect time0 touches
                    touchProcessDetect (Just (eventTime ev)) touches'
        Stylus -> rb
        Eraser -> rb
-       Timeout -> do
-         touchProcessDetect time0 touches
+       Timeout -> touchProcessDetect time0 touches
        _ -> do liftIO $ putStrLn $ "WARNING: unexpected event: " ++ show ev
                rb
 
@@ -218,7 +216,7 @@ touchProcess selection origTrans touches
                                                 2 -> s1 / (s0+1) -- FIXME: +1 is not nice here
                     dil = Dilation factor (a1 - factor *^ a0)
 
-                setGui (map Fing (M.elems touches'))
+                setGui (Fing <$> M.elems touches')
                 case selection of
                   Just sel -> transSel sel dil
                   Nothing -> do stDilation .= origTrans + dil
@@ -235,7 +233,7 @@ touchProcess selection origTrans touches
    cont = touchProcess selection origTrans
 
 transSel :: Selection -> Dilation -> GtkP ()
-transSel origSel dil = setSelection ((apply dil) <$> origSel)
+transSel origSel dil = setSelection (apply dil <$> origSel)
 
 moveSelWithPen :: Selection -> Coord -> GtkP ()
 moveSelWithPen origSel origCoord = do
@@ -245,9 +243,9 @@ moveSelWithPen origSel origCoord = do
       Event {eventType  = Event.Release} -> return ()
       Event {eventModifiers = 0} -> return () -- motion without any pressed key
       _ -> do
-        transSel origSel (Dilation 1 (eventCoord ev - origCoord ))
+        transSel origSel (Dilation 1 (eventCoord ev - origCoord))
         moveSelWithPen origSel origCoord
-    _ -> do moveSelWithPen origSel origCoord -- ignore events from another source
+    _ -> moveSelWithPen origSel origCoord -- ignore events from another source
 
 waitForRelease source = do
   ev <- wait "wait pen release"
@@ -295,7 +293,7 @@ menu' a0 p c options = do
        else menu' a0 (eventCoord ev) c options
 
 penMenu :: [(String, Coord -> GtkP ())]
-penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
+penMenu = [(name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
 
 -- 1: shift
 -- 256 mouse 1 or touch
@@ -303,7 +301,9 @@ penMenu = [ (name, \_ -> stPen .= pen) | (name,pen) <- configuredPens]
 -- 1024 mouse 3 (right)
 whynote :: GtkP ()
 whynote = do
- mapM_ (Process.forkHandler . softButtonHandler) softButtons
+ ctx <- view (to id)
+ rmc <- evalUiElementCoord ctx rootMenuCenter
+ mapM_ (Process.forkHandler . softButtonHandler) =<< mapM (mkUiElement ctx) softButtons
  Process.forkHandler (palmRejection (-1) (-1))
  loop $ do
   ev <- wait "top-level"
@@ -321,13 +321,13 @@ whynote = do
                  haveSel, dist evOrig (selMenuCenter st) < menuRootRadius ->
       menu (pi/4) [("Delete",\_ -> deleteSelection)] (selMenuCenter st)
     Event {..} | eventSource == Stylus || (eventSource == MultiTouch && eventType == Begin),
-                 dist evOrig rootMenuCenter < menuRootRadius -> do
+                 dist evOrig rmc < menuRootRadius -> do
       menu (pi/4) ([("Pen",menu 0 penMenu)
                    ,("Undo",\c -> do
                         dones <- use stNoteData
                         redos <- use stRedo
                         undoProcess c (redos,dones))
-                   ,("Quit",menu 0 [("Confirm",\_ -> quit)])]) rootMenuCenter
+                   ,("Quit",menu 0 [("Confirm",\_ -> quit)])]) rmc
     Event {eventSource = Stylus,..} | (eventType == Press && eventButton == 1), _stButtons st == [] -> do
       if haveSel
         then if inSel
@@ -359,11 +359,11 @@ whynote = do
         touchProcessEntry (apply tr <$> ev)
     _ -> return ()
 
+rootMenuCenter :: UiElementCoord
+rootMenuCenter = UiElementCoord 0 0 (Coord 40 40)
+
 selMenuCenter :: St -> Coord
 selMenuCenter St{..} = apply _stDilation (intervalHi (selectionBox _stSelection))
-
-rootMenuCenter :: Coord
-rootMenuCenter = Coord 40 40
 
 renderAll ctx st@St{_stDilation = tr,..} = do
    let whenSel = when (not $ isEmptySelection $ _stSelection)
@@ -371,38 +371,36 @@ renderAll ctx st@St{_stDilation = tr,..} = do
    whenSel $ renderSelection (apply tr <$> _stSelection)
    forM_ _stGui renderGui
    renderSoftButtons ctx st
-   renderMenuRoot "menu" rootMenuCenter
+   renderMenuRoot "menu" =<< evalUiElementCoord ctx rootMenuCenter
    whenSel $ renderMenuRoot "sel" (selMenuCenter st)
 
 ----------------------
 -- Soft buttons
 
-data Button' a = Button SoftButton String Double a deriving Functor
+data Button' a = Button SoftButton String Double a deriving (Functor,Foldable,Traversable)
 type Button = Button' Coord
 
-softButtons = [Button Erase  "erase"  50 (Coord (-40) ( -50))
-              ,Button Lasso  "lasso"  50 (Coord (-40) (-160))
-              ,Button Select "select" 50 (Coord (-40) (-270))
-              ]
+softButtons :: [Button' UiElementCoord]
+softButtons = [Button Erase  "erase"  50 (botRight (Coord (-40) ( -50)))
+              ,Button Lasso  "lasso"  50 (botRight (Coord (-40) (-160)))
+              ,Button Select "select" 50 (botRight (Coord (-40) (-270)))
+              ] where botRight = UiElementCoord 1 1
 
-shiftBySz :: (Int,Int) -> Coord -> Coord
-shiftBySz (w,h) Coord {..} = Coord {coordX = coordX + fromIntegral w,
-                                    coordY = coordY + fromIntegral h,..}
-
--- renderSoftButtons :: Ctx -> St -> Render ()
-renderSoftButtons ctx St {..}= do
-  sz <- liftIO (getWinSize ctx)
-  forM_ (map (fmap (shiftBySz sz)) softButtons) $ \(Button btn txt rad c) ->
+renderSoftButtons ctx St {..} = do
+  btns <- mapM (mkUiElement ctx) softButtons
+  forM_ btns $ \(Button btn txt rad c) ->
     renderNode (btn `elem` _stButtons) txt rad c
+
+mkUiElement :: (MonadIO f, Traversable t) => Ctx -> t UiElementCoord -> f (t Coord)
+mkUiElement ctx = traverse (evalUiElementCoord ctx)
 
 touchWaitForRelease :: SoftButton -> Int -> GtkP ()
 touchWaitForRelease btn touchNumber = do
   ev <- waitOn "btn release" (\Event{..} -> eventSource == MultiTouch &&
                                             eventButton == touchNumber)
   case eventType ev of
-    End -> do
-      stButtons %= filter (/= btn)
-      invalidateAll
+    End -> do stButtons %= filter (/= btn)
+              invalidateAll
     _ -> touchWaitForRelease btn touchNumber
 
 softButtonHandler (Button softBtn txt rad c) = loop $ do
@@ -410,8 +408,32 @@ softButtonHandler (Button softBtn txt rad c) = loop $ do
   ev@Event{..} <- waitOn ("btn: " ++ txt) (\Event{..} -> eventSource == MultiTouch &&
                                                          eventType == Begin)
   sz <- liftIO (getWinSize ctx)
-  if (dist (shiftBySz sz c) (eventCoord ev) < rad)
+  if (dist c (eventCoord ev) < rad)
     then do stButtons %= (softBtn:)
             invalidateAll
             Process.forkHandler (touchWaitForRelease softBtn eventButton)
     else do Process.reject Event{..} -- not for us after all
+
+
+---------------------------------------
+-- Logical Coordinate for ui elements
+
+data UiElementCoord = UiElementCoord {uiElBot :: Double,
+                                      uiElRight :: Double,
+                                      uiElK :: Coord} deriving Show
+instance AbelianAdditive UiElementCoord where
+instance Additive UiElementCoord where
+  zero = UiElementCoord 0 0 zero
+  UiElementCoord b1 r1 k1 + UiElementCoord b2 r2 k2 = UiElementCoord (b1+b2) (r1+r2) (k1+k2)
+instance Group UiElementCoord where
+  negate = ((negate (1::Double)) *^)
+instance Module Double UiElementCoord where
+  f *^ (UiElementCoord b r k) = UiElementCoord (f*^b) (f*^r) (f*^k)
+
+evalUiElementCoord :: MonadIO m => Ctx -> UiElementCoord -> m Coord
+evalUiElementCoord ctx (UiElementCoord b r k) = do
+    (rr,bb) <- liftIO (getWinSize ctx)
+    let res = k + b *^ (Coord 0 (fromIntegral bb)) + r *^ (Coord (fromIntegral rr) 0)
+    return res
+
+mirrorUiElementCoord (UiElementCoord b r (Coord kx ky)) = UiElementCoord b (1-r) (Coord (negate kx) ky)
